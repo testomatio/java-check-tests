@@ -1,4 +1,4 @@
-# Java Reporter CLI
+# Java-Check-Tests
 
 Command-line interface for the Testomat.io Java Reporter library.
 
