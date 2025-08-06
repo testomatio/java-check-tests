@@ -77,7 +77,6 @@ public class CleanIdsCommand implements Runnable {
     @Override
     public void run() {
         try {
-            // Автоматично dry-run якщо URL не передано і не вказано --dry-run явно
             boolean noDryRunFlag = !dryRun;
             if (noDryRunFlag && (serverUrl == null || serverUrl.trim().isEmpty())) {
                 log("TESTOMATIO_URL not provided, running in dry-run mode");
@@ -172,9 +171,8 @@ public class CleanIdsCommand implements Runnable {
     }
 
     private Set<String> getServerTestIds() {
-        // В dry-run режимі не робимо запит до сервера
         if (dryRun) {
-            return new HashSet<>(); // Порожній набір для dry-run
+            return new HashSet<>();
         }
 
         if (serverUrl == null || serverUrl.trim().isEmpty()) {
@@ -242,27 +240,26 @@ public class CleanIdsCommand implements Runnable {
     private int processTestIdAnnotations(CompilationUnit cu, Set<String> serverTestIds) {
         List<AnnotationExpr> annotationsToProcess = new ArrayList<>();
 
-        // Знаходимо всі методи з @TestId анотаціями
         for (MethodDeclaration method : cu.findAll(MethodDeclaration.class)) {
             for (AnnotationExpr annotation : method.getAnnotations()) {
                 if (TEST_ID_ANNOTATION.equals(annotation.getNameAsString())) {
                     String testId = extractTestIdValue(annotation);
                     
                     if (dryRun) {
-                        // В dry-run режимі показуємо всі знайдені TestId
                         if (testId != null) {
                             annotationsToProcess.add(annotation);
-                            log("    Found @TestId(\"" + testId + "\") in method: " + method.getNameAsString());
+                            log("    Found @TestId(\"" + testId
+                                    + "\") in method: " + method.getNameAsString());
                         }
                     } else if (testId != null && serverTestIds.contains(testId)) {
                         annotationsToProcess.add(annotation);
-                        log("    Removing @TestId(\"" + testId + "\") from method: " + method.getNameAsString());
+                        log("    Removing @TestId(\"" + testId
+                                + "\") from method: " + method.getNameAsString());
                     }
                 }
             }
         }
 
-        // Видаляємо знайдені анотації тільки якщо не dry-run
         if (!dryRun) {
             for (AnnotationExpr annotation : annotationsToProcess) {
                 annotation.remove();
@@ -284,16 +281,14 @@ public class CleanIdsCommand implements Runnable {
     }
 
     private int removeUnusedTestIdImports(CompilationUnit cu) {
-        // Перевіряємо, чи є ще @TestId анотації в файлі (після видалення)
         boolean hasTestIdAnnotations = cu.findAll(MethodDeclaration.class).stream()
                 .flatMap(method -> method.getAnnotations().stream())
                 .anyMatch(annotation -> TEST_ID_ANNOTATION.equals(annotation.getNameAsString()));
 
         if (hasTestIdAnnotations) {
-            return 0; // Імпорт ще потрібен
+            return 0;
         }
 
-        // Видаляємо імпорт TestId якщо він є
         List<ImportDeclaration> importsToRemove = cu.getImports().stream()
                 .filter(importDecl -> TEST_ID_IMPORT.equals(importDecl.getNameAsString()))
                 .collect(Collectors.toList());
@@ -315,7 +310,9 @@ public class CleanIdsCommand implements Runnable {
         });
     }
 
-    private void printSummary(int totalProcessedAnnotations, int totalRemovedImports, int modifiedFiles) {
+    private void printSummary(int totalProcessedAnnotations,
+                              int totalRemovedImports,
+                              int modifiedFiles) {
         if (dryRun) {
             System.out.println("\nDry run completed. No files were modified.");
             System.out.println("Found @TestId annotations: " + totalProcessedAnnotations);
@@ -332,7 +329,8 @@ public class CleanIdsCommand implements Runnable {
                 System.out.println("  - TestId imports: " + totalRemovedImports);
             }
         }
-        System.out.println((dryRun ? "Files that would be processed: " : "  - Files modified: ") + modifiedFiles);
+        System.out.println((dryRun ? "Files that would be processed: "
+                : "  - Files modified: ") + modifiedFiles);
 
         if (dryRun && (serverUrl == null || serverUrl.trim().isEmpty())) {
             System.out.println("\nRun the same command with TESTOMATIO_URL provided to execute.");

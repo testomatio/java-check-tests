@@ -27,7 +27,8 @@ public class TestomatCliCommand implements Runnable {
         System.out.println("  export     - Export JUnit and TestNG test methods to testomat.io");
         System.out.println("  update-ids - Import test IDs into the codebase");
         System.out.println("  purge      - Remove @TestId annotations and imports from test files");
-        System.out.println("  clean-ids  - Remove @TestId annotations for tests that exist on the server");
+        System.out.println(
+                "  clean-ids  - Remove @TestId annotations for tests that exist on the server");
         System.out.println("  all        - Run export then update-ids");
         System.out.println("  help       - Show help information");
         System.out.println();

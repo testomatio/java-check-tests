@@ -56,7 +56,6 @@ public class TestExportCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         try {
-            // Автоматично dry-run якщо API key не передано і не вказано --dry-run явно
             boolean noDryRunFlag = !dryRun;
             if (noDryRunFlag && (apiKey == null || apiKey.trim().isEmpty())) {
                 log("TESTOMATIO API key not provided, running in dry-run mode");
@@ -87,7 +86,8 @@ public class TestExportCommand implements Callable<Integer> {
             if (dryRun) {
                 System.out.println("\nDry run completed. No data was sent to server.");
                 if (apiKey == null || apiKey.trim().isEmpty()) {
-                    System.out.println("Run the same command with apikey and url provided to execute.");
+                    System.out.println(
+                            "Run the same command with apikey and url provided to execute.");
                 }
             } else {
                 System.out.println("\n✓ Export completed! Total methods exported: "
@@ -168,7 +168,8 @@ public class TestExportCommand implements Callable<Integer> {
                     printTestCases(testCases);
                 } else {
                     if (serverUrl == null || serverUrl.trim().isEmpty()) {
-                        throw new IllegalArgumentException("TESTOMATIO_URL is required for actual execution");
+                        throw new IllegalArgumentException(
+                                "TESTOMATIO_URL is required for actual execution");
                     }
 
                     String requestBody = jsonBuilder.buildRequestBody(testCases, framework);
