@@ -65,14 +65,14 @@ Removes `@TestId` annotations and related imports from all classes in the direct
 
 ```bash
     # Export tests
-    java -jar testomat-cli.jar export --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar java-check-tests-0.1.0.jar export --apikey tstmt_your_key --url https://app.testomat.io
     
     # Import IDs back to code  
-    java -jar testomat-cli.jar importId --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar java-check-tests-0.1.0.jar importId --apikey tstmt_your_key --url https://app.testomat.io
     
     # Run export and import 
-    java -jar testomat-cli.jar all --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar java-check-tests-0.1.0.jar all --apikey tstmt_your_key --url https://app.testomat.io
     
     # Clean up test IDs
-    java -jar testomat-cli.jar wipeId --directory ./src/test/java
+    java -jar java-check-tests-0.1.0.jar wipeId --directory ./src/test/java
 ```
