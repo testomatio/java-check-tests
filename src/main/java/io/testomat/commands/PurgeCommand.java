@@ -19,10 +19,10 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 @Command(
-        name = "wipeId",
+        name = "purge",
         description = "Remove @TestId annotations and imports from test files"
 )
-public class WipeIdCommand implements Runnable {
+public class PurgeCommand implements Runnable {
 
     private static final String JAVA_EXTENSION = ".java";
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
@@ -40,11 +40,11 @@ public class WipeIdCommand implements Runnable {
             description = "Show what would be removed without making changes")
     private boolean dryRun = false;
 
-    public WipeIdCommand() {
+    public PurgeCommand() {
         this.parser = new JavaParser();
     }
 
-    public WipeIdCommand(JavaParser parser) {
+    public PurgeCommand(JavaParser parser) {
         this.parser = parser;
     }
 
@@ -157,7 +157,6 @@ public class WipeIdCommand implements Runnable {
     private int removeTestIdAnnotations(CompilationUnit cu) {
         List<AnnotationExpr> testIdAnnotations = new ArrayList<>();
 
-        // Знаходимо всі методи з @TestId анотаціями
         for (MethodDeclaration method : cu.findAll(MethodDeclaration.class)) {
             for (AnnotationExpr annotation : method.getAnnotations()) {
                 if ("TestId".equals(annotation.getNameAsString())) {
@@ -166,7 +165,6 @@ public class WipeIdCommand implements Runnable {
             }
         }
 
-        // Видаляємо знайдені анотації
         for (AnnotationExpr annotation : testIdAnnotations) {
             annotation.remove();
         }
@@ -177,7 +175,6 @@ public class WipeIdCommand implements Runnable {
     private int removeTestIdImports(CompilationUnit cu) {
         List<ImportDeclaration> testIdImports = new ArrayList<>();
 
-        // Знаходимо всі імпорти TestId
         for (ImportDeclaration importDecl : cu.getImports()) {
             String importName = importDecl.getNameAsString();
             if (TEST_ID_IMPORT.equals(importName)) {
@@ -185,7 +182,6 @@ public class WipeIdCommand implements Runnable {
             }
         }
 
-        // Видаляємо знайдені імпорти
         for (ImportDeclaration importDecl : testIdImports) {
             importDecl.remove();
         }

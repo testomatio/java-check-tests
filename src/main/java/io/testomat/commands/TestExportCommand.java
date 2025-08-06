@@ -3,6 +3,7 @@ package io.testomat.commands;
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.CliClient;
 import io.testomat.client.TestomatHttpClient;
+import io.testomat.exception.CliException;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.JsonBuilder;
 import io.testomat.service.TestCase;
@@ -35,8 +36,8 @@ public class TestExportCommand implements Callable<Integer> {
     private File directory = new File(CURRENT_DIRECTORY);
 
     @Option(names = {"-key", "--apikey"},
-            required = true,
-            description = "API key for testomat.io")
+            description = "API key for testomat.io",
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
     @Option(names = "--url",
@@ -55,6 +56,12 @@ public class TestExportCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         try {
+            boolean noDryRunFlag = !dryRun;
+            if (noDryRunFlag && (apiKey == null || apiKey.trim().isEmpty())) {
+                log("TESTOMATIO API key not provided, running in dry-run mode");
+                dryRun = true;
+            }
+
             if (verbose) {
                 logPlatformInfo();
             }
@@ -78,6 +85,10 @@ public class TestExportCommand implements Callable<Integer> {
 
             if (dryRun) {
                 System.out.println("\nDry run completed. No data was sent to server.");
+                if (apiKey == null || apiKey.trim().isEmpty()) {
+                    System.out.println(
+                            "Run the same command with apikey and url provided to execute.");
+                }
             } else {
                 System.out.println("\n✓ Export completed! Total methods exported: "
                         + totalExported);
@@ -88,7 +99,7 @@ public class TestExportCommand implements Callable<Integer> {
         } catch (Exception e) {
             System.err.println("Export failed: " + e.getMessage());
             if (verbose) {
-                e.printStackTrace();
+                throw new CliException("Export failed: " + e.getMessage());
             }
             return ERROR_EXIT_CODE;
         }
@@ -101,7 +112,7 @@ public class TestExportCommand implements Callable<Integer> {
         }
 
         if (!directory.isDirectory()) {
-            System.err.println("Error: Path is not a directory: " + directory.getAbsolutePath());
+            System.err.println("Error: Path is not directory: " + directory.getAbsolutePath());
             return false;
         }
 
@@ -156,6 +167,11 @@ public class TestExportCommand implements Callable<Integer> {
                 if (dryRun) {
                     printTestCases(testCases);
                 } else {
+                    if (serverUrl == null || serverUrl.trim().isEmpty()) {
+                        throw new IllegalArgumentException(
+                                "TESTOMATIO_URL is required for actual execution");
+                    }
+
                     String requestBody = jsonBuilder.buildRequestBody(testCases, framework);
                     String requestUrl = serverUrl + API_URL + apiKey;
                     httpClient.sendPostRequest(requestUrl, requestBody);

@@ -3,10 +3,10 @@ package io.testomat.commands;
 import picocli.CommandLine;
 
 @CommandLine.Command(
-        name = "all",
+        name = "update-ids",
         description = "Run export then importId",
         mixinStandardHelpOptions = true)
-public class AllCommand implements Runnable {
+public class UpdateIdCommand implements Runnable {
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
@@ -42,7 +42,7 @@ public class AllCommand implements Runnable {
             spec.commandLine().getErr().println("export failed with code " + code1);
             System.exit(code1);
         }
-        int code2 = parent.execute("importId",
+        int code2 = parent.execute("import",
                 "--apikey=" + apiKey,
                 "--url=" + url,
                 "--directory=" + directory);
