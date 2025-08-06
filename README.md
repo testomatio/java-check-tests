@@ -24,7 +24,8 @@ This CLI tool can be used to:
 
 Exports the code of your test methods to the server.
 
-Use this command before running tests to see the code and have proper package structure in the UI.
+Use this command before running tests to see the code and have proper package structure in the UI.  
+Will dry run if apikey is not provided.
 
 >**Options:**
 >- `--apikey` / `-key` - Your Testomat.io project API key (required)
@@ -33,7 +34,7 @@ Use this command before running tests to see the code and have proper package st
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be exported without sending (optional)
 
-### `importId`
+### `update-ids`
 
 Imports test IDs from the server into your codebase and adds the necessary imports to test classes.
 
@@ -59,15 +60,23 @@ Convenience command for typical workflow.
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
-
 ### `purge`
 
-Removes `@TestId` annotations and related imports from all classes in the directory recursively.
+Removes `@TestId` annotations and related imports from all classes in the directory recursively.  
+**Runs locally only**
 
 >**Options:**
 >- `--directory` / `-d` - Directory to clean (optional, defaults to current directory)
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be removed without making changes (optional)
+
+### `clean-ids`
+Removes `@TestId` annotations in the classes in the directory recursively, but only related to the project with  
+the particular apikey that is provided as --apikey.
+
+>- `--apikey` / `-key` - Your Testomat.io project API key (required)
+>- `--url` - Server URL (required)
+>- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
 ## Examples
 
@@ -81,6 +90,10 @@ Removes `@TestId` annotations and related imports from all classes in the direct
     # Run export and import 
     java -jar java-check-tests-0.1.0.jar all --apikey tstmt_your_key --url https://app.testomat.io
     
-    # Clean up test IDs
+    # Clean up test IDs (locally)
     java -jar java-check-tests-0.1.0.jar purge --directory ./src/test/java
+    
+    # Clean up test IDs related to the project
+    java -jar java-check-tests-0.1.0.jar clean-ids --apikey tstmt_your_key --url https://app.testomat.io
+
 ```
