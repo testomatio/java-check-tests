@@ -4,16 +4,17 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
 @Command(
-        name = "testomat",
-        description = "Testomat.io CLI - Export tests and import IDs",
+        name = "java -jar java-check-tests-{version}",
+        description = "[Java-check-tests] v0.1.0",
         mixinStandardHelpOptions = true,
-        version = "1.0.0",
+        version = "0.1.0",
         subcommands = {
                 TestExportCommand.class,
                 UpdateIdsCommand.class,
                 CommandLine.HelpCommand.class,
                 AllCommand.class,
-                PurgeCommand.class
+                PurgeCommand.class,
+                CleanIdsCommand.class
         }
 )
 public class TestomatCliCommand implements Runnable {
@@ -23,11 +24,14 @@ public class TestomatCliCommand implements Runnable {
         System.out.println("Testomat.io CLI v0.1.0");
         System.out.println();
         System.out.println("Available commands:");
-        System.out.println("  export    - Export JUnit and TestNG test methods to testomat.io");
-        System.out.println("  importId  - Import test IDs into the codebase");
-        System.out.println("  help      - Show help information");
+        System.out.println("  export     - Export JUnit and TestNG test methods to testomat.io");
+        System.out.println("  update-ids - Import test IDs into the codebase");
+        System.out.println("  purge      - Remove @TestId annotations and imports from test files");
+        System.out.println("  clean-ids  - Remove @TestId annotations for tests that exist on the server");
+        System.out.println("  all        - Run export then update-ids");
+        System.out.println("  help       - Show help information");
         System.out.println();
-        System.out.println("Use 'testomat <command> --help' for more information on a command.");
+        System.out.println("Use ' <command> --help' for more information on a command.");
     }
 
     public static void main(String[] args) {
