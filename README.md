@@ -34,7 +34,7 @@ Will dry run if apikey is not provided.
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be exported without sending (optional)
 
-### `update-ids`
+### `import`
 
 Imports test IDs from the server into your codebase and adds the necessary imports to test classes.
 
@@ -42,14 +42,15 @@ Should be used after the `export` command succeeds.
 
 - IDs will be added as `@TestId` annotation values
 - Automatically imports `io.testomat.core.annotation.TestId`
-- Updates existing IDs if they have changed on the server
+- Updates existing IDs if they have changed on the server  
+**In general, please, use `update-ids`** to import IDs
 
 >**Options:**
 >- `--apikey` / `-key` - Your Testomat.io project API key (required)
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
-### `all`
+### `update-ids`
 
 Executes `export` and `importId` commands sequentially.
 
@@ -85,10 +86,10 @@ the particular apikey that is provided as --apikey.
     java -jar java-check-tests-0.1.0.jar export --apikey tstmt_your_key --url https://app.testomat.io
     
     # Import IDs back to code  
-    java -jar java-check-tests-0.1.0.jar importId --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar java-check-tests-0.1.0.jar import --apikey tstmt_your_key --url https://app.testomat.io
     
     # Run export and import 
-    java -jar java-check-tests-0.1.0.jar all --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar java-check-tests-0.1.0.jar update-ids --apikey tstmt_your_key --url https://app.testomat.io
     
     # Clean up test IDs (locally)
     java -jar java-check-tests-0.1.0.jar purge --directory ./src/test/java

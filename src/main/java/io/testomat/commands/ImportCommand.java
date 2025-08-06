@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import picocli.CommandLine;
 
-@CommandLine.Command(name = "update-ids", description = "Imports IDs into the codebase")
-public class UpdateIdsCommand implements Runnable {
+@CommandLine.Command(name = "import", description = "Imports IDs into the codebase")
+public class ImportCommand implements Runnable {
 
     private static final int EXPECTED_PARTS_COUNT = 3;
     private static final int PATH_INDEX = 0;
@@ -57,13 +57,13 @@ public class UpdateIdsCommand implements Runnable {
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
-    public UpdateIdsCommand() {
+    public ImportCommand() {
         this.httpClient = new CliClient();
         this.javaParser = new JavaParser();
     }
 
-    public UpdateIdsCommand(TestomatHttpClient httpClient, JavaParser javaParser,
-                            String directory, String apiKey, String serverUrl) {
+    public ImportCommand(TestomatHttpClient httpClient, JavaParser javaParser,
+                         String directory, String apiKey, String serverUrl) {
         this.httpClient = httpClient;
         this.javaParser = javaParser;
         this.directory = directory;
@@ -72,7 +72,7 @@ public class UpdateIdsCommand implements Runnable {
     }
 
     public static void main(String[] args) {
-        CommandLine.run(new UpdateIdsCommand(), args);
+        CommandLine.run(new ImportCommand(), args);
     }
 
     @Override
