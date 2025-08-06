@@ -10,10 +10,10 @@ import picocli.CommandLine.Command;
         version = "1.0.0",
         subcommands = {
                 TestExportCommand.class,
-                ImportIdCommand.class,
+                UpdateIdsCommand.class,
                 CommandLine.HelpCommand.class,
                 AllCommand.class,
-                WipeIdCommand.class
+                PurgeCommand.class
         }
 )
 public class TestomatCliCommand implements Runnable {

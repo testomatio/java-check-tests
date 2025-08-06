@@ -60,7 +60,7 @@ Convenience command for typical workflow.
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
 
-### `wipeId`
+### `purge`
 
 Removes `@TestId` annotations and related imports from all classes in the directory recursively.
 
@@ -82,5 +82,5 @@ Removes `@TestId` annotations and related imports from all classes in the direct
     java -jar java-check-tests-0.1.0.jar all --apikey tstmt_your_key --url https://app.testomat.io
     
     # Clean up test IDs
-    java -jar java-check-tests-0.1.0.jar wipeId --directory ./src/test/java
+    java -jar java-check-tests-0.1.0.jar purge --directory ./src/test/java
 ```

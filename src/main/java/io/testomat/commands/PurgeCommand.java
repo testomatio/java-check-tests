@@ -19,10 +19,10 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 @Command(
-        name = "wipeId",
+        name = "purge",
         description = "Remove @TestId annotations and imports from test files"
 )
-public class WipeIdCommand implements Runnable {
+public class PurgeCommand implements Runnable {
 
     private static final String JAVA_EXTENSION = ".java";
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
@@ -40,11 +40,11 @@ public class WipeIdCommand implements Runnable {
             description = "Show what would be removed without making changes")
     private boolean dryRun = false;
 
-    public WipeIdCommand() {
+    public PurgeCommand() {
         this.parser = new JavaParser();
     }
 
-    public WipeIdCommand(JavaParser parser) {
+    public PurgeCommand(JavaParser parser) {
         this.parser = parser;
     }
 
