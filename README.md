@@ -10,6 +10,14 @@ This CLI tool can be used to:
 - Import test IDs from the server into your codebase
 - Remove test IDs when needed
 
+## Supported frameworks
+| Framework |  Status  |
+|-----------|:--------:|
+| TestNG    |    ✅     |
+| JUnit     |    ✅     |
+
+> New frameworks support will be added soon.
+
 ## Commands
 
 ### `export`
