@@ -10,6 +10,8 @@ This CLI tool can be used to:
 - Import test IDs from the server into your codebase
 - Remove test IDs when needed
 
+---
+
 ## Supported frameworks
 | Framework |  Status  |
 |-----------|:--------:|
@@ -17,6 +19,8 @@ This CLI tool can be used to:
 | JUnit     |    ✅     |
 
 > New frameworks support will be added soon.
+
+---
 
 ## Commands
 
@@ -79,6 +83,8 @@ the particular apikey that is provided as --apikey.
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
+---
+
 ## Examples
 
 ```bash
@@ -98,3 +104,20 @@ the particular apikey that is provided as --apikey.
     java -jar java-check-tests-0.1.0.jar clean-ids --apikey tstmt_your_key --url https://app.testomat.io
 
 ```
+---
+
+## Oneliners
+
+You can use these oneliners to **download and update ids in one move  
+(the `update-ids` command will be executed)
+
+
+
+>- UNIX, MACOS:  
+`export TESTOMATIO_URL=... && \export TESTOMATIO=... && curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && java -jar java-check-tests.jar update-ids`
+
+>- WINDOWS cdm:  
+  `set TESTOMATIO_URL=...&& set TESTOMATIO=...&& curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& java -jar java-check-tests.jar update-ids`
+
+**Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
+**Be patient to the whitespaces in the Windows command.**
