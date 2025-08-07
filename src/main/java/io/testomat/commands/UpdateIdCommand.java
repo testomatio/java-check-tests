@@ -24,7 +24,8 @@ public class UpdateIdCommand implements Runnable {
 
     @CommandLine.Option(
             names = {"--directory", "-d"},
-            description = "Directory"
+            description = "Directory",
+            defaultValue = "."
     )
     private String directory;
 
