@@ -32,31 +32,38 @@ import picocli.CommandLine.Option;
         description = "Remove @TestId annotations for tests that exist on the server"
 )
 public class CleanIdsCommand implements Runnable {
-    
+
     private static final String JAVA_EXTENSION = ".java";
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
     private static final String TEST_ID_ANNOTATION = "TestId";
     private static final String TESTS_FIELD = "tests";
     private static final String TEST_ID_PREFIX = "@T";
 
-    @Option(names = {"-d", "--directory"},
-            description = "Directory to scan for test files (default: current directory)")
-    private String directory = ".";
+    @Option(
+            names = {"-d", "--directory"},
+            description = "Directory to scan for test files (default: current directory)",
+            defaultValue = ".")
+    private String directory;
 
-    @Option(names = {"--apikey", "-key"}, required = true,
-            description = "API key for testomat.io")
+    @Option(
+            names = {"--apikey", "-key"}, required = true,
+            description = "API key for testomat.io",
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
-    @Option(names = "--url",
+    @Option(
+            names = "--url",
             description = "Testomat server URL",
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
-    @Option(names = {"-v", "--verbose"},
+    @Option(
+            names = {"-v", "--verbose"},
             description = "Enable verbose output")
     private boolean verbose = false;
 
-    @Option(names = {"--dry-run"},
+    @Option(
+            names = {"--dry-run"},
             description = "Show what would be removed without making changes")
     private boolean dryRun = false;
 
@@ -87,7 +94,7 @@ public class CleanIdsCommand implements Runnable {
                     + Paths.get(directory).toAbsolutePath());
 
             Set<String> serverTestIds = getServerTestIds();
-            
+
             if (!dryRun && !serverTestIds.isEmpty()) {
                 log("Found " + serverTestIds.size() + " test IDs on server");
             }
@@ -116,16 +123,16 @@ public class CleanIdsCommand implements Runnable {
 
                     int processedAnnotations = processTestIdAnnotations(cu, serverTestIds);
                     int removedImports = 0;
-                    
+
                     if (processedAnnotations > 0) {
                         removedImports = removeUnusedTestIdImports(cu);
-                        
+
                         if (dryRun) {
                             log("  Found " + processedAnnotations + " @TestId annotations");
                         } else {
                             log("  Removed " + processedAnnotations + " @TestId annotations");
                         }
-                        
+
                         if (removedImports > 0) {
                             if (dryRun) {
                                 log("  Would remove " + removedImports + " unused TestId imports");
@@ -244,7 +251,7 @@ public class CleanIdsCommand implements Runnable {
             for (AnnotationExpr annotation : method.getAnnotations()) {
                 if (TEST_ID_ANNOTATION.equals(annotation.getNameAsString())) {
                     String testId = extractTestIdValue(annotation);
-                    
+
                     if (dryRun) {
                         if (testId != null) {
                             annotationsToProcess.add(annotation);

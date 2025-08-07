@@ -28,15 +28,19 @@ public class PurgeCommand implements Runnable {
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
     private final JavaParser parser;
 
-    @Option(names = {"-d", "--directory"},
-            description = "Directory to scan for test files (default: current directory)")
-    private String directory = ".";
+    @Option(
+            names = {"-d", "--directory"},
+            description = "Directory to scan for test files (default: current directory)",
+            defaultValue = ".")
+    private String directory;
 
-    @Option(names = {"-v", "--verbose"},
+    @Option(
+            names = {"-v", "--verbose"},
             description = "Enable verbose output")
     private boolean verbose = false;
 
-    @Option(names = {"--dry-run"},
+    @Option(
+            names = {"--dry-run"},
             description = "Show what would be removed without making changes")
     private boolean dryRun = false;
 

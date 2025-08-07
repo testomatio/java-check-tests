@@ -31,25 +31,31 @@ public class TestExportCommand implements Callable<Integer> {
     private static final int SUCCESS_EXIT_CODE = 0;
     private static final int ERROR_EXIT_CODE = 1;
 
-    @Option(names = {"-d", "--directory"},
-            description = "Directory to scan for test files (default: current directory)")
+    @Option(
+            names = {"-d", "--directory"},
+            description = "Directory to scan for test files (default: current directory)",
+            defaultValue = ".")
     private File directory = new File(CURRENT_DIRECTORY);
 
-    @Option(names = {"-key", "--apikey"},
+    @Option(
+            names = {"-key", "--apikey"},
             description = "API key for testomat.io",
             defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
-    @Option(names = "--url",
+    @Option(
+            names = "--url",
             description = "Testomat server URL",
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
-    @Option(names = {"-v", "--verbose"},
+    @Option(
+            names = {"-v", "--verbose"},
             description = "Enable verbose output")
     private boolean verbose = false;
 
-    @Option(names = {"--dry-run"},
+    @Option(
+            names = {"--dry-run"},
             description = "Show what would be exported without sending")
     private boolean dryRun = false;
 

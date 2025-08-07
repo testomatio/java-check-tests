@@ -10,8 +10,10 @@ public class UpdateIdCommand implements Runnable {
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
-            required = true,
-            description = "API key for Testomat.io")
+
+            description = "API key for Testomat.io",
+            defaultValue = "${env:TESTOMATIO}",
+            required = true)
     private String apiKey;
 
     @CommandLine.Option(
