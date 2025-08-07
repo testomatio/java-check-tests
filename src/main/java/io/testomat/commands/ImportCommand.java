@@ -40,20 +40,27 @@ public class ImportCommand implements Runnable {
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
     private static final String TEST_ID_ANNOTATION = "TestId";
     private static final String TEST_ID_PREFIX = "@T";
-    private static final String CURRENT_DIRECTORY = ".";
     private static final String TESTS_FIELD = "tests";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final TestomatHttpClient httpClient;
     private final JavaParser javaParser;
 
-    @CommandLine.Option(names = {"--directory", "-d"})
+    @CommandLine.Option(
+            names = {"--directory", "-d"},
+            defaultValue = ".")
     private String directory;
 
-    @CommandLine.Option(names = {"--apikey", "-key"}, required = true)
+    @CommandLine.Option(
+            names = {"--apikey", "-key"},
+            description = "Testomat project api key",
+            defaultValue = "${env:TESTOMATIO}",
+            required = true)
     private String apiKey;
 
-    @CommandLine.Option(names = "--url", description = "Testomat server URL",
+    @CommandLine.Option(
+            names = "--url",
+            description = "Testomat server URL",
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
@@ -153,19 +160,14 @@ public class ImportCommand implements Runnable {
     }
 
     private List<Path> findJavaFiles() {
-        String targetDirectory = resolveDirectory();
 
-        try (Stream<Path> pathStream = Files.walk(Paths.get(targetDirectory))) {
+        try (Stream<Path> pathStream = Files.walk(Paths.get(directory))) {
             return pathStream
                     .filter(path -> path.toString().endsWith(JAVA_EXTENSION))
                     .collect(Collectors.toList());
         } catch (IOException e) {
             throw new CliException("Failed to scan directory for Java files", e);
         }
-    }
-
-    private String resolveDirectory() {
-        return (directory == null || directory.isEmpty()) ? CURRENT_DIRECTORY : directory;
     }
 
     private List<CompilationUnit> parseJavaFiles(List<Path> javaFiles) {
