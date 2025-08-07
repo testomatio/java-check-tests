@@ -36,7 +36,7 @@
     </dependencies>
 
     <build>
-        <finalName>java-check-tests-${project.version}</finalName>
+        <finalName>java-check-tests</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
