@@ -8,7 +8,7 @@ import picocli.CommandLine.Command;
         mixinStandardHelpOptions = true,
         subcommands = {
                 ImportCommand.class,
-                UpdateIdsCommand.class,
+                PullIdsCommand.class,
                 CommandLine.HelpCommand.class,
                 SyncCommand.class,
                 CleanIdsCommand.class,
@@ -23,11 +23,11 @@ public class TestomatCliCommand implements Runnable {
         System.out.println();
         System.out.println("Available commands:");
         System.out.println("  import     - Export JUnit and TestNG test methods to testomat.io");
-        System.out.println("  update-ids - Import test IDs into the codebase");
+        System.out.println("  pull-ids - Import test IDs into the codebase");
         System.out.println("  clean-ids      - Remove @TestId annotations and imports from test files");
         System.out.println(
                 "  clean-project-ids  - Remove @TestId annotations for tests that exist on the server");
-        System.out.println("  sync        - Run export then update-ids");
+        System.out.println("  sync        - Run export then update-ids. Alias `update-ids`");
         System.out.println("  help       - Show help information");
         System.out.println();
         System.out.println("Use ' <command> --help' for more information on a command.");

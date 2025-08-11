@@ -46,7 +46,7 @@ public class SyncCommand implements Runnable {
             spec.commandLine().getErr().println("export failed with code " + code1);
             System.exit(code1);
         }
-        int code2 = parent.execute("update-ids",
+        int code2 = parent.execute("pull-ids",
                 "--apikey=" + apiKey,
                 "--url=" + url,
                 "--directory=" + directory);
