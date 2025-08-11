@@ -89,19 +89,13 @@ the particular apikey that is provided as --apikey.
 
 ```bash
     # Export tests
-    java -jar java-check-tests-0.1.0.jar export --apikey tstmt_your_key --url https://app.testomat.io
-    
-    # Import IDs back to code  
     java -jar java-check-tests-0.1.0.jar import --apikey tstmt_your_key --url https://app.testomat.io
     
     # Run export and import 
-    java -jar java-check-tests-0.1.0.jar update-ids --apikey tstmt_your_key --url https://app.testomat.io
-    
+    java -jar java-check-tests-0.1.0.jar sync --apikey tstmt_your_key --url https://app.testomat.io
+
     # Clean up test IDs (locally)
     java -jar java-check-tests-0.1.0.jar purge --directory ./src/test/java
-    
-    # Clean up test IDs related to the project
-    java -jar java-check-tests-0.1.0.jar clean-ids --apikey tstmt_your_key --url https://app.testomat.io
 
 ```
 ---
