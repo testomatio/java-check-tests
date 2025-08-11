@@ -36,7 +36,7 @@
     </dependencies>
 
     <build>
-        <finalName>java-check-tests</finalName>
+        <finalName>testomatio</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
