@@ -1,15 +1,14 @@
 package io.testomat.commands;
 
-import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.CliClient;
-import io.testomat.client.TestomatHttpClient;
-import io.testomat.exception.CliException;
+import io.testomat.service.DirectoryValidator;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.JsonBuilder;
-import io.testomat.service.TestCase;
+import io.testomat.service.TestExportService;
 import io.testomat.service.TestFileScanner;
 import io.testomat.service.TestFrameworkDetector;
 import io.testomat.service.TestMethodExtractor;
+import io.testomat.service.VerboseLogger;
 import java.io.File;
 import java.nio.file.FileSystems;
 import java.util.List;
@@ -26,10 +25,12 @@ import picocli.CommandLine.Option;
 )
 public class ImportCommand implements Callable<Integer> {
 
-    private static final String API_URL = "/api/load?api_key=";
     private static final String CURRENT_DIRECTORY = ".";
     private static final int SUCCESS_EXIT_CODE = 0;
     private static final int ERROR_EXIT_CODE = 1;
+
+    private final DirectoryValidator validator;
+    private TestExportService.ExportConfig config;
 
     @Option(
             names = {"-d", "--directory"},
@@ -59,146 +60,84 @@ public class ImportCommand implements Callable<Integer> {
             description = "Show what would be exported without sending")
     private boolean dryRun = false;
 
+    public ImportCommand() {
+        this.validator = new DirectoryValidator();
+    }
+
+    public ImportCommand(DirectoryValidator validator) {
+        this.validator = validator;
+    }
+
     @Override
     public Integer call() throws Exception {
         try {
+            VerboseLogger logger = new VerboseLogger(verbose);
+
             boolean noDryRunFlag = !dryRun;
             if (noDryRunFlag && (apiKey == null || apiKey.trim().isEmpty())) {
-                log("TESTOMATIO API key not provided, running in dry-run mode");
+                logger.log("TESTOMATIO API key not provided, running in dry-run mode");
                 dryRun = true;
             }
 
             if (verbose) {
-                logPlatformInfo();
+                logPlatformInfo(logger);
             }
+            logger.log("Starting test export from directory: " + directory.getAbsolutePath());
 
-            log("Starting test export from directory: " + directory.getAbsolutePath());
-
-            if (!validateDirectory()) {
-                return ERROR_EXIT_CODE;
-            }
+            validator.validateDirectory(directory);
 
             TestFileScanner scanner = new TestFileScanner();
             List<File> testFiles = scanner.findTestFiles(directory);
-            log("Found " + testFiles.size() + " test files");
+            logger.log("Found " + testFiles.size() + " test files");
 
             if (testFiles.isEmpty()) {
                 System.out.println("No test files found!");
                 return SUCCESS_EXIT_CODE;
             }
 
-            int totalExported = processTestFiles(testFiles);
+            config = new TestExportService.ExportConfig(
+                    apiKey, serverUrl, dryRun, verbose);
 
-            if (dryRun) {
-                System.out.println("\nDry run completed. No data was sent to server.");
-                if (apiKey == null || apiKey.trim().isEmpty()) {
-                    System.out.println(
-                            "Run the same command with apikey and url provided to execute.");
-                }
-            } else {
-                System.out.println("\n✓ Export completed! Total methods exported: "
-                        + totalExported);
-            }
+            TestExportService exportService = createExportService(logger);
+            TestExportService.ExportResult result =
+                    exportService.processTestFiles(testFiles, config);
+
+            printCompletionMessage(result.getTotalExported());
 
             return SUCCESS_EXIT_CODE;
 
         } catch (Exception e) {
             System.err.println("Export failed: " + e.getMessage());
             if (verbose) {
-                throw new CliException("Export failed: " + e.getMessage());
+                e.printStackTrace();
             }
             return ERROR_EXIT_CODE;
         }
     }
 
-    private boolean validateDirectory() {
-        if (!directory.exists()) {
-            System.err.println("Error: Directory does not exist: " + directory.getAbsolutePath());
-            return false;
-        }
-
-        if (!directory.isDirectory()) {
-            System.err.println("Error: Path is not directory: " + directory.getAbsolutePath());
-            return false;
-        }
-
-        if (!directory.canRead()) {
-            System.err.println("Error: Cannot read directory: " + directory.getAbsolutePath());
-            return false;
-        }
-
-        return true;
+    private TestExportService createExportService(VerboseLogger logger) {
+        return new TestExportService(
+                new JavaFileParser(),
+                new TestMethodExtractor(),
+                new TestFrameworkDetector(),
+                new JsonBuilder(),
+                new CliClient(),
+                logger
+        );
     }
 
-    private int processTestFiles(List<File> testFiles) {
-        JavaFileParser fileParser = new JavaFileParser();
-        TestMethodExtractor extractor = new TestMethodExtractor();
-        TestFrameworkDetector detector = new TestFrameworkDetector();
-        JsonBuilder jsonBuilder = new JsonBuilder();
-        TestomatHttpClient httpClient = new CliClient();
-
-        int totalExported = 0;
-
-        for (File testFile : testFiles) {
-            try {
-                log("Processing: " + testFile.getName());
-
-                CompilationUnit compilationUnit = fileParser.parseFile(testFile.getAbsolutePath());
-                if (compilationUnit == null) {
-                    log("  Skipped: Could not parse file");
-                    continue;
-                }
-
-                String framework = detector.detectFramework(compilationUnit);
-                if (framework == null) {
-                    log("  Skipped: No test framework detected");
-                    continue;
-                }
-
-                log("  Framework: " + framework);
-
-                List<TestCase> testCases = extractor.extractTestCases(
-                        compilationUnit,
-                        testFile.getAbsolutePath(),
-                        framework
-                );
-
-                if (testCases.isEmpty()) {
-                    log("  Skipped: No test methods found");
-                    continue;
-                }
-
-                log("  Found " + testCases.size() + " test methods");
-
-                if (dryRun) {
-                    printTestCases(testCases);
-                } else {
-                    if (serverUrl == null || serverUrl.trim().isEmpty()) {
-                        throw new IllegalArgumentException(
-                                "TESTOMATIO_URL is required for actual execution");
-                    }
-
-                    String requestBody = jsonBuilder.buildRequestBody(testCases, framework);
-                    String requestUrl = serverUrl + API_URL + apiKey;
-                    httpClient.sendPostRequest(requestUrl, requestBody);
-                    totalExported += testCases.size();
-                    log("  ✓ Exported " + testCases.size() + " test methods");
-                }
-
-            } catch (Exception e) {
-                System.err.println("Error processing "
-                        + testFile.getName()
-                        + ": " + e.getMessage());
-                if (verbose) {
-                    e.printStackTrace();
-                }
+    private void printCompletionMessage(int totalExported) {
+        if (dryRun) {
+            System.out.println("\nDry run completed. No data was sent to server.");
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                System.out.println("Run the same command with apikey and url provided to execute.");
             }
+        } else {
+            System.out.println("\n✓ Export completed! Total methods exported: " + totalExported);
         }
-
-        return totalExported;
     }
 
-    private void logPlatformInfo() {
+    private void logPlatformInfo(VerboseLogger logger) {
         final String os = System.getProperty("os.name");
         final String osVersion = System.getProperty("os.version");
         final String osArch = System.getProperty("os.arch");
@@ -207,25 +146,12 @@ public class ImportCommand implements Callable<Integer> {
         final String userDir = System.getProperty("user.dir");
         final String fileSeparator = FileSystems.getDefault().getSeparator();
 
-        log("=== Platform Information ===");
-        log("OS: " + os + " " + osVersion + " (" + osArch + ")");
-        log("Java: " + javaVersion + " (" + javaVendor + ")");
-        log("Working directory: " + userDir);
-        log("File separator: '" + fileSeparator + "'");
-        log("===========================");
-    }
-
-    private void log(String message) {
-        if (verbose) {
-            System.out.println(message);
-        }
-    }
-
-    private void printTestCases(List<TestCase> testCases) {
-        for (TestCase testCase : testCases) {
-            System.out.println("    - " + testCase.getName()
-                    + " [" + String.join(", ", testCase.getLabels()) + "]");
-        }
+        logger.log("=== Platform Information ===");
+        logger.log("OS: " + os + " " + osVersion + " (" + osArch + ")");
+        logger.log("Java: " + javaVersion + " (" + javaVendor + ")");
+        logger.log("Working directory: " + userDir);
+        logger.log("File separator: '" + fileSeparator + "'");
+        logger.log("===========================");
     }
 
     public static void main(String[] args) {

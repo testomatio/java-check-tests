@@ -1,20 +1,14 @@
 package io.testomat.commands;
 
-import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.AnnotationExpr;
 import io.testomat.exception.CliException;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import io.testomat.service.AnnotationCleaner;
+import io.testomat.service.JavaFileParser;
+import io.testomat.service.TestFileScanner;
+import io.testomat.service.VerboseLogger;
+import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -24,9 +18,9 @@ import picocli.CommandLine.Option;
 )
 public class CleanIdsCommand implements Runnable {
 
-    private static final String JAVA_EXTENSION = ".java";
-    private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
-    private final JavaParser parser;
+    private final JavaFileParser parser;
+    private final TestFileScanner scanner;
+    private final AnnotationCleaner cleaner;
 
     @Option(
             names = {"-d", "--directory"},
@@ -45,152 +39,82 @@ public class CleanIdsCommand implements Runnable {
     private boolean dryRun = false;
 
     public CleanIdsCommand() {
-        this.parser = new JavaParser();
+        this.parser = new JavaFileParser();
+        this.scanner = new TestFileScanner();
+        this.cleaner = new AnnotationCleaner();
     }
 
-    public CleanIdsCommand(JavaParser parser) {
+    public CleanIdsCommand(JavaFileParser parser,
+                           TestFileScanner scanner,
+                           AnnotationCleaner cleaner) {
         this.parser = parser;
+        this.scanner = scanner;
+        this.cleaner = cleaner;
     }
 
     @Override
     public void run() {
         try {
-            log("Starting @TestId cleanup from directory: "
+            VerboseLogger logger = new VerboseLogger(verbose);
+
+            logger.log("Starting @TestId cleanup from directory: "
                     + Paths.get(directory).toAbsolutePath());
 
-            List<Path> javaFiles = findJavaFiles();
-            log("Found " + javaFiles.size() + " Java files");
+            List<File> javaFiles = scanner.findTestFiles(new File(directory));
+            logger.log("Found " + javaFiles.size() + " Java files");
 
             if (javaFiles.isEmpty()) {
                 System.out.println("No Java files found!");
                 return;
             }
 
-            int totalRemovedAnnotations = 0;
-            int totalRemovedImports = 0;
-            int modifiedFiles = 0;
-
-            for (Path javaFile : javaFiles) {
-                try {
-                    log("Processing: " + javaFile.getFileName());
-
-                    CompilationUnit cu = parseFile(javaFile);
-                    if (cu == null) {
-                        log("  Skipped: Could not parse file");
-                        continue;
-                    }
-
-                    int removedAnnotations = removeTestIdAnnotations(cu);
-                    int removedImports = removeTestIdImports(cu);
-
-                    if (removedAnnotations > 0 || removedImports > 0) {
-                        log("  Removed " + removedAnnotations + " @TestId annotations");
-                        log("  Removed " + removedImports + " TestId imports");
-
-                        if (!dryRun) {
-                            saveFile(cu);
-                        }
-
-                        totalRemovedAnnotations += removedAnnotations;
-                        totalRemovedImports += removedImports;
-                        modifiedFiles++;
-                    } else {
-                        log("  No @TestId annotations or imports found");
-                    }
-
-                } catch (Exception e) {
-                    System.err.println("Error processing "
-                            + javaFile.getFileName()
-                            + ": " + e.getMessage());
-                    if (verbose) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            if (dryRun) {
-                System.out.println("\nDry run completed. No files were modified.");
-                System.out.println("Would remove:");
-            } else {
-                System.out.println("\n✓ Cleanup completed!");
-                System.out.println("Removed:");
-            }
-
-            System.out.println("  - @TestId annotations: " + totalRemovedAnnotations);
-            System.out.println("  - TestId imports: " + totalRemovedImports);
-            System.out.println("  - Modified files: " + modifiedFiles);
+            CleanupResult result = processFiles(javaFiles, parser, cleaner, logger);
+            printSummary(result);
 
         } catch (Exception e) {
-            System.err.println("Cleanup failed: " + e.getMessage());
-            if (verbose) {
-                e.printStackTrace();
-            }
-            throw new CliException("WipeId command failed", e);
+            handleError("Cleanup failed", e);
         }
     }
 
-    private List<Path> findJavaFiles() {
-        try (Stream<Path> pathStream = Files.walk(Paths.get(directory))) {
-            return pathStream
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(JAVA_EXTENSION))
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            throw new CliException("Failed to scan directory for Java files", e);
-        }
-    }
+    private CleanupResult processFiles(List<File> javaFiles, JavaFileParser parser,
+                                       AnnotationCleaner cleaner, VerboseLogger logger) {
+        CleanupResult totalResult = new CleanupResult();
 
-    private CompilationUnit parseFile(Path file) {
-        if (!Files.exists(file)) {
-            throw new CliException("File does not exist: " + file);
-        }
-
-        if (!Files.isReadable(file)) {
-            throw new CliException("File is not readable: " + file);
-        }
-
-        try {
-            return parser.parse(file, StandardCharsets.UTF_8)
-                    .getResult()
-                    .orElse(null);
-        } catch (IOException e) {
-            throw new CliException("Could not parse file " + file, e);
-        }
-    }
-
-    private int removeTestIdAnnotations(CompilationUnit cu) {
-        List<AnnotationExpr> testIdAnnotations = new ArrayList<>();
-
-        for (MethodDeclaration method : cu.findAll(MethodDeclaration.class)) {
-            for (AnnotationExpr annotation : method.getAnnotations()) {
-                if ("TestId".equals(annotation.getNameAsString())) {
-                    testIdAnnotations.add(annotation);
-                }
+        for (File javaFile : javaFiles) {
+            try {
+                processFile(javaFile, parser, cleaner, logger, totalResult);
+            } catch (Exception e) {
+                handleFileError(javaFile, e);
             }
         }
 
-        for (AnnotationExpr annotation : testIdAnnotations) {
-            annotation.remove();
-        }
-
-        return testIdAnnotations.size();
+        return totalResult;
     }
 
-    private int removeTestIdImports(CompilationUnit cu) {
-        List<ImportDeclaration> testIdImports = new ArrayList<>();
+    private void processFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
+                             VerboseLogger logger, CleanupResult totalResult) {
+        logger.log("Processing: " + javaFile.getName());
 
-        for (ImportDeclaration importDecl : cu.getImports()) {
-            String importName = importDecl.getNameAsString();
-            if (TEST_ID_IMPORT.equals(importName)) {
-                testIdImports.add(importDecl);
+        CompilationUnit cu = parser.parseFile(javaFile.getAbsolutePath());
+        if (cu == null) {
+            logger.log("  Skipped: Could not parse file");
+            return;
+        }
+
+        AnnotationCleaner.CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
+
+        if (result.getRemovedAnnotations() > 0 || result.getRemovedImports() > 0) {
+            logger.log("  Removed " + result.getRemovedAnnotations() + " @TestId annotations");
+            logger.log("  Removed " + result.getRemovedImports() + " TestId imports");
+
+            if (!dryRun) {
+                saveFile(cu);
             }
-        }
 
-        for (ImportDeclaration importDecl : testIdImports) {
-            importDecl.remove();
+            totalResult.addResults(result.getRemovedAnnotations(), result.getRemovedImports(), 1);
+        } else {
+            logger.log("  No @TestId annotations or imports found");
         }
-
-        return testIdImports.size();
     }
 
     private void saveFile(CompilationUnit cu) {
@@ -203,9 +127,56 @@ public class CleanIdsCommand implements Runnable {
         });
     }
 
-    private void log(String message) {
+    private void printSummary(CleanupResult result) {
+        if (dryRun) {
+            System.out.println("\nDry run completed. No files were modified.");
+            System.out.println("Would remove:");
+        } else {
+            System.out.println("\n✓ Cleanup completed!");
+            System.out.println("Removed:");
+        }
+
+        System.out.println("  - @TestId annotations: " + result.getTotalAnnotations());
+        System.out.println("  - TestId imports: " + result.getTotalImports());
+        System.out.println("  - Modified files: " + result.getModifiedFiles());
+    }
+
+    private void handleFileError(File javaFile, Exception e) {
+        System.err.println("Error processing " + javaFile.getName() + ": " + e.getMessage());
         if (verbose) {
-            System.out.println(message);
+            throw new CliException("Failed to process file: " + javaFile, e);
+        }
+    }
+
+    private void handleError(String message, Exception e) {
+        System.err.println(message + ": " + e.getMessage());
+        if (verbose) {
+            throw new CliException("Failed to process file: " + message, e);
+        }
+        throw new CliException(message, e);
+    }
+
+    private static class CleanupResult {
+        private int totalAnnotations = 0;
+        private int totalImports = 0;
+        private int modifiedFiles = 0;
+
+        void addResults(int annotations, int imports, int files) {
+            this.totalAnnotations += annotations;
+            this.totalImports += imports;
+            this.modifiedFiles += files;
+        }
+
+        int getTotalAnnotations() {
+            return totalAnnotations;
+        }
+
+        int getTotalImports() {
+            return totalImports;
+        }
+
+        int getModifiedFiles() {
+            return modifiedFiles;
         }
     }
 }
