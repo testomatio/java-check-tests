@@ -24,9 +24,9 @@ This CLI tool can be used to:
 
 ## Commands
 
-### `export`
+### `import`
 
-Exports the code of your test methods to the server.
+Imports the code of your test methods to the testomat.io.
 
 Use this command before running tests to see the code and have proper package structure in the UI.  
 Will dry run if apikey is not provided.
@@ -38,34 +38,21 @@ Will dry run if apikey is not provided.
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be exported without sending (optional)
 
-### `import`
 
-Imports test IDs from the server into your codebase and adds the necessary imports to test classes.
+### `sync`
 
-Should be used after the `export` command succeeds.
-
-- IDs will be added as `@TestId` annotation values
-- Automatically imports `io.testomat.core.annotation.TestId`
-- Updates existing IDs if they have changed on the server  
-**In general, please, use `update-ids`** to import IDs
-
->**Options:**
->- `--apikey` / `-key` - Your Testomat.io project API key (required)
->- `--url` - Server URL (required)
->- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
-
-### `update-ids`
-
-Executes `export` and `importId` commands sequentially.
+Executes tests code to the Testomat.io and pull new/updated IDs from the server into your codebase.
 
 Convenience command for typical workflow.
 
+>**Alias** `update-ids`
+
 >**Options:**
 >- `--apikey` / `-key` - Your Testomat.io project API key (required)
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
-### `purge`
+### `clean-ids`
 
 Removes `@TestId` annotations and related imports from all classes in the directory recursively.  
 **Runs locally only**
@@ -75,49 +62,45 @@ Removes `@TestId` annotations and related imports from all classes in the direct
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be removed without making changes (optional)
 
-### `clean-ids`
-Removes `@TestId` annotations in the classes in the directory recursively, but only related to the project with  
-the particular apikey that is provided as --apikey.
-
->- `--apikey` / `-key` - Your Testomat.io project API key (required)
->- `--url` - Server URL (required)
->- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
-
 ---
 
 ## Examples
 
+>Note: The CLI will search for the test methods recursively from the location where testomatio.jar is.
+>If you do not use --directory or -d option - it will affect all the reachable test methods! 
+
 ```bash
-    # Export tests
-    java -jar java-check-tests-0.1.0.jar export --apikey tstmt_your_key --url https://app.testomat.io
+    # Imports your tests code to the Testomat.io
+    java -jar testomatio.jar import --apikey tstmt_your_key --url https://app.testomat.io
     
-    # Import IDs back to code  
-    java -jar java-check-tests-0.1.0.jar import --apikey tstmt_your_key --url https://app.testomat.io
-    
-    # Run export and import 
-    java -jar java-check-tests-0.1.0.jar update-ids --apikey tstmt_your_key --url https://app.testomat.io
+    # Updates IDs from of the test (imports them to the Testomat.io and then updates IDs in toyr codebase) 
+    java -jar testomatio.jar update-ids --apikey tstmt_your_key --url https://app.testomat.io
     
     # Clean up test IDs (locally)
-    java -jar java-check-tests-0.1.0.jar purge --directory ./src/test/java
-    
-    # Clean up test IDs related to the project
-    java -jar java-check-tests-0.1.0.jar clean-ids --apikey tstmt_your_key --url https://app.testomat.io
-
+    java -jar testomatio.jar clean-ids --directory ./src/test/java
 ```
 ---
 
 ## Oneliners
 
-You can use these oneliners to **download and update ids in one move  
-(the `update-ids` command will be executed)
-
-
+You can use these oneliners to **download and update ids** in one move  
+(the `sync` command will be executed)
 
 >- UNIX, MACOS:  
-`export TESTOMATIO_URL=... && \export TESTOMATIO=... && curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && java -jar java-check-tests.jar update-ids`
-
+```bash
+  export TESTOMATIO_URL=... && \
+  export TESTOMATIO=... && \
+  curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && \
+  java -jar java-check-tests.jar sync
+```
 >- WINDOWS cdm:  
-  `set TESTOMATIO_URL=...&& set TESTOMATIO=...&& curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& java -jar java-check-tests.jar update-ids`
-
+```cmd
+    set TESTOMATIO_URL=...&& ^
+    set TESTOMATIO=...&& ^
+    curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& ^
+    java -jar java-check-tests.jar sync
+```
 **Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
 **Be patient to the whitespaces in the Windows command.**
+
+>Note: The latest testomatio.jar file will be downloaded from this repository releases.
