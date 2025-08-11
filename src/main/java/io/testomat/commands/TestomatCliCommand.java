@@ -12,7 +12,7 @@ import picocli.CommandLine.Command;
                 TestExportCommand.class,
                 ImportCommand.class,
                 CommandLine.HelpCommand.class,
-                UpdateIdCommand.class,
+                SyncCommand.class,
                 PurgeCommand.class,
                 CleanIdsCommand.class
         }

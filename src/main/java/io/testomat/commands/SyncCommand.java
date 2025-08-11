@@ -3,10 +3,11 @@ package io.testomat.commands;
 import picocli.CommandLine;
 
 @CommandLine.Command(
-        name = "update-ids",
+        name = "sync",
+        aliases = {"update-ids"},
         description = "Run export then importId",
         mixinStandardHelpOptions = true)
-public class UpdateIdCommand implements Runnable {
+public class SyncCommand implements Runnable {
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
