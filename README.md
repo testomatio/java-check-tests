@@ -74,7 +74,7 @@ Removes `@TestId` annotations and related imports from all classes in the direct
     java -jar testomatio.jar import --apikey tstmt_your_key --url https://app.testomat.io
     
     # Updates IDs from of the test (imports them to the Testomat.io and then updates IDs in toyr codebase) 
-    java -jar testomatio.jar update-ids --apikey tstmt_your_key --url https://app.testomat.io
+    java -jar testomatio.jar sync --apikey tstmt_your_key --url https://app.testomat.io
     
     # Clean up test IDs (locally)
     java -jar testomatio.jar clean-ids --directory ./src/test/java
@@ -91,14 +91,14 @@ You can use these oneliners to **download and update ids** in one move
   export TESTOMATIO_URL=... && \
   export TESTOMATIO=... && \
   curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && \
-  java -jar java-check-tests.jar sync
+  java -jar testomatio.jar sync
 ```
 >- WINDOWS cdm:  
 ```cmd
     set TESTOMATIO_URL=...&& ^
     set TESTOMATIO=...&& ^
     curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& ^
-    java -jar java-check-tests.jar sync
+    java -jar testomatio.jar sync
 ```
 **Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
 **Be patient to the whitespaces in the Windows command.**
