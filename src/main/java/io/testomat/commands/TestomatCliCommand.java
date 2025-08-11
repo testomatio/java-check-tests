@@ -12,7 +12,6 @@ import picocli.CommandLine.Command;
                 CommandLine.HelpCommand.class,
                 SyncCommand.class,
                 CleanIdsCommand.class,
-                CleanProjectIdsCommand.class
         }
 )
 public class TestomatCliCommand implements Runnable {
