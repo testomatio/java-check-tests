@@ -1,5 +1,6 @@
 package io.testomat.service;
 
+import io.testomat.model.TestCase;
 import java.util.List;
 
 public class JsonBuilder {

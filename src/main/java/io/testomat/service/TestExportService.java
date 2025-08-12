@@ -2,6 +2,7 @@ package io.testomat.service;
 
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.TestomatHttpClient;
+import io.testomat.model.TestCase;
 import java.io.File;
 import java.util.List;
 

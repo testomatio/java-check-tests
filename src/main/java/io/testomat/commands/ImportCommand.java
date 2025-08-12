@@ -20,8 +20,7 @@ import picocli.CommandLine.Option;
 @Command(
         name = "import",
         description = "Imports JUnit and TestNG test methods to testomat.io",
-        mixinStandardHelpOptions = true,
-        version = "1.0"
+        mixinStandardHelpOptions = true
 )
 public class ImportCommand implements Callable<Integer> {
 
@@ -30,6 +29,8 @@ public class ImportCommand implements Callable<Integer> {
     private static final int ERROR_EXIT_CODE = 1;
 
     private final DirectoryValidator validator;
+    private final TestFileScanner scanner;
+
     private TestExportService.ExportConfig config;
 
     @Option(
@@ -62,10 +63,12 @@ public class ImportCommand implements Callable<Integer> {
 
     public ImportCommand() {
         this.validator = new DirectoryValidator();
+        this.scanner = new TestFileScanner();
     }
 
-    public ImportCommand(DirectoryValidator validator) {
+    public ImportCommand(DirectoryValidator validator, TestFileScanner scanner) {
         this.validator = validator;
+        this.scanner = scanner;
     }
 
     @Override
@@ -86,7 +89,6 @@ public class ImportCommand implements Callable<Integer> {
 
             validator.validateDirectory(directory);
 
-            TestFileScanner scanner = new TestFileScanner();
             List<File> testFiles = scanner.findTestFiles(directory);
             logger.log("Found " + testFiles.size() + " test files");
 

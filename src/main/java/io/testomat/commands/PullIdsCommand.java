@@ -17,6 +17,7 @@ import picocli.CommandLine;
 @CommandLine.Command(name = "pull-ids", description =
         "Pulls IDs into your codebase from testomat.io")
 public class PullIdsCommand implements Runnable {
+    private final JavaParser javaParser;
 
     @CommandLine.Option(
             names = {"--directory", "-d"},
@@ -35,6 +36,14 @@ public class PullIdsCommand implements Runnable {
             description = "Testomat server URL",
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
+
+    public PullIdsCommand() {
+        this.javaParser = new JavaParser();
+    }
+
+    public PullIdsCommand(JavaParser javaParser) {
+        this.javaParser = javaParser;
+    }
 
     @Override
     public void run() {
@@ -72,7 +81,7 @@ public class PullIdsCommand implements Runnable {
     }
 
     private List<CompilationUnit> parseJavaFiles(List<Path> javaFiles) {
-        JavaParser javaParser = new JavaParser();
+
         return javaFiles.stream()
                 .map(javaFile -> parseJavaFile(javaFile, javaParser))
                 .collect(Collectors.toList());
