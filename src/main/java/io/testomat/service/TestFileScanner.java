@@ -59,7 +59,7 @@ public class TestFileScanner {
         }
 
         if (!markDirectoryAsVisited(directory)) {
-            return; // Already visited or circular reference
+            return;
         }
 
         if (isSymbolicLinkOutsideProject(directory)) {

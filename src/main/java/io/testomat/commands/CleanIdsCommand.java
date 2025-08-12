@@ -1,61 +1,32 @@
 package io.testomat.commands;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
-import io.testomat.client.CliClient;
-import io.testomat.client.TestomatHttpClient;
 import io.testomat.exception.CliException;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import io.testomat.service.AnnotationCleaner;
+import io.testomat.service.JavaFileParser;
+import io.testomat.service.TestFileScanner;
+import io.testomat.service.VerboseLogger;
+import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 @Command(
         name = "clean-ids",
-        description = "Remove @TestId annotations for tests that exist on the server"
+        description = "Remove @TestId annotations and imports from test files"
 )
 public class CleanIdsCommand implements Runnable {
 
-    private static final String JAVA_EXTENSION = ".java";
-    private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
-    private static final String TEST_ID_ANNOTATION = "TestId";
-    private static final String TESTS_FIELD = "tests";
-    private static final String TEST_ID_PREFIX = "@T";
+    private final JavaFileParser parser;
+    private final TestFileScanner scanner;
+    private final AnnotationCleaner cleaner;
 
     @Option(
             names = {"-d", "--directory"},
             description = "Directory to scan for test files (default: current directory)",
             defaultValue = ".")
     private String directory;
-
-    @Option(
-            names = {"--apikey", "-key"}, required = true,
-            description = "API key for testomat.io",
-            defaultValue = "${env:TESTOMATIO}")
-    private String apiKey;
-
-    @Option(
-            names = "--url",
-            description = "Testomat server URL",
-            defaultValue = "${env:TESTOMATIO_URL}")
-    private String serverUrl;
 
     @Option(
             names = {"-v", "--verbose"},
@@ -67,286 +38,145 @@ public class CleanIdsCommand implements Runnable {
             description = "Show what would be removed without making changes")
     private boolean dryRun = false;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final TestomatHttpClient httpClient;
-    private final JavaParser parser;
-
     public CleanIdsCommand() {
-        this.httpClient = new CliClient();
-        this.parser = new JavaParser();
+        this.parser = new JavaFileParser();
+        this.scanner = new TestFileScanner();
+        this.cleaner = new AnnotationCleaner();
     }
 
-    public CleanIdsCommand(TestomatHttpClient httpClient, JavaParser parser) {
-        this.httpClient = httpClient;
+    public CleanIdsCommand(JavaFileParser parser,
+                           TestFileScanner scanner,
+                           AnnotationCleaner cleaner) {
         this.parser = parser;
+        this.scanner = scanner;
+        this.cleaner = cleaner;
     }
 
     @Override
     public void run() {
         try {
-            boolean noDryRunFlag = !dryRun;
-            if (noDryRunFlag && (serverUrl == null || serverUrl.trim().isEmpty())) {
-                log("TESTOMATIO_URL not provided, running in dry-run mode");
-                dryRun = true;
-            }
+            VerboseLogger logger = new VerboseLogger(verbose);
 
-            log("Starting @TestId cleanup from directory: "
+            logger.log("Starting @TestId cleanup from directory: "
                     + Paths.get(directory).toAbsolutePath());
 
-            Set<String> serverTestIds = getServerTestIds();
-
-            if (!dryRun && !serverTestIds.isEmpty()) {
-                log("Found " + serverTestIds.size() + " test IDs on server");
-            }
-
-            List<Path> javaFiles = findJavaFiles();
-            log("Found " + javaFiles.size() + " Java files");
+            List<File> javaFiles = scanner.findTestFiles(new File(directory));
+            logger.log("Found " + javaFiles.size() + " Java files");
 
             if (javaFiles.isEmpty()) {
                 System.out.println("No Java files found!");
                 return;
             }
 
-            int totalProcessedAnnotations = 0;
-            int totalRemovedImports = 0;
-            int modifiedFiles = 0;
-
-            for (Path javaFile : javaFiles) {
-                try {
-                    log("Processing: " + javaFile.getFileName());
-
-                    CompilationUnit cu = parseFile(javaFile);
-                    if (cu == null) {
-                        log("  Skipped: Could not parse file");
-                        continue;
-                    }
-
-                    int processedAnnotations = processTestIdAnnotations(cu, serverTestIds);
-                    int removedImports = 0;
-
-                    if (processedAnnotations > 0) {
-                        removedImports = removeUnusedTestIdImports(cu);
-
-                        if (dryRun) {
-                            log("  Found " + processedAnnotations + " @TestId annotations");
-                        } else {
-                            log("  Removed " + processedAnnotations + " @TestId annotations");
-                        }
-
-                        if (removedImports > 0) {
-                            if (dryRun) {
-                                log("  Would remove " + removedImports + " unused TestId imports");
-                            } else {
-                                log("  Removed " + removedImports + " unused TestId imports");
-                            }
-                        }
-
-                        if (!dryRun) {
-                            saveFile(cu, javaFile);
-                        }
-
-                        totalProcessedAnnotations += processedAnnotations;
-                        totalRemovedImports += removedImports;
-                        modifiedFiles++;
-                    } else {
-                        if (dryRun) {
-                            log("  No @TestId annotations found");
-                        } else {
-                            log("  No matching @TestId annotations found");
-                        }
-                    }
-
-                } catch (Exception e) {
-                    System.err.println("Error processing "
-                            + javaFile.getFileName()
-                            + ": " + e.getMessage());
-                    if (verbose) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            printSummary(totalProcessedAnnotations, totalRemovedImports, modifiedFiles);
+            CleanupResult result = processFiles(javaFiles, parser, cleaner, logger);
+            printSummary(result);
 
         } catch (Exception e) {
-            System.err.println("Clean-ids failed: " + e.getMessage());
-            if (verbose) {
-                e.printStackTrace();
-            }
-            throw new CliException("Clean-ids command failed", e);
+            handleError("Cleanup failed", e);
         }
     }
 
-    private Set<String> getServerTestIds() {
-        if (dryRun) {
-            return new HashSet<>();
-        }
+    private CleanupResult processFiles(List<File> javaFiles, JavaFileParser parser,
+                                       AnnotationCleaner cleaner, VerboseLogger logger) {
+        CleanupResult totalResult = new CleanupResult();
 
-        if (serverUrl == null || serverUrl.trim().isEmpty()) {
-            throw new CliException("TESTOMATIO_URL is required for actual execution");
-        }
-
-        try {
-            String response = httpClient.sendGetRequest(apiKey, serverUrl);
-            return parseTestIdsFromResponse(response);
-        } catch (Exception e) {
-            throw new CliException("Failed to get test IDs from server", e);
-        }
-    }
-
-    private Set<String> parseTestIdsFromResponse(String response) {
-        try {
-            JsonNode rootNode = objectMapper.readTree(response);
-            JsonNode testsNode = rootNode.get(TESTS_FIELD);
-
-            if (testsNode == null || !testsNode.isObject()) {
-                throw new CliException("Invalid response format: missing or invalid 'tests' field");
-            }
-
-            Set<String> testIds = new HashSet<>();
-            testsNode.fields().forEachRemaining(entry -> {
-                String testId = entry.getValue().asText().replace(TEST_ID_PREFIX, "");
-                testIds.add(testId);
-            });
-
-            return testIds;
-        } catch (JsonProcessingException e) {
-            throw new CliException("Failed to parse server response", e);
-        }
-    }
-
-    private List<Path> findJavaFiles() {
-        try (Stream<Path> pathStream = Files.walk(Paths.get(directory))) {
-            return pathStream
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(JAVA_EXTENSION))
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            throw new CliException("Failed to scan directory for Java files", e);
-        }
-    }
-
-    private CompilationUnit parseFile(Path file) {
-        if (!Files.exists(file)) {
-            throw new CliException("File does not exist: " + file);
-        }
-
-        if (!Files.isReadable(file)) {
-            throw new CliException("File is not readable: " + file);
-        }
-
-        try {
-            return parser.parse(file, StandardCharsets.UTF_8)
-                    .getResult()
-                    .orElse(null);
-        } catch (IOException e) {
-            throw new CliException("Could not parse file " + file, e);
-        }
-    }
-
-    private int processTestIdAnnotations(CompilationUnit cu, Set<String> serverTestIds) {
-        List<AnnotationExpr> annotationsToProcess = new ArrayList<>();
-
-        for (MethodDeclaration method : cu.findAll(MethodDeclaration.class)) {
-            for (AnnotationExpr annotation : method.getAnnotations()) {
-                if (TEST_ID_ANNOTATION.equals(annotation.getNameAsString())) {
-                    String testId = extractTestIdValue(annotation);
-
-                    if (dryRun) {
-                        if (testId != null) {
-                            annotationsToProcess.add(annotation);
-                            log("    Found @TestId(\"" + testId
-                                    + "\") in method: " + method.getNameAsString());
-                        }
-                    } else if (testId != null && serverTestIds.contains(testId)) {
-                        annotationsToProcess.add(annotation);
-                        log("    Removing @TestId(\"" + testId
-                                + "\") from method: " + method.getNameAsString());
-                    }
-                }
+        for (File javaFile : javaFiles) {
+            try {
+                processFile(javaFile, parser, cleaner, logger, totalResult);
+            } catch (Exception e) {
+                handleFileError(javaFile, e);
             }
         }
 
-        if (!dryRun) {
-            for (AnnotationExpr annotation : annotationsToProcess) {
-                annotation.remove();
+        return totalResult;
+    }
+
+    private void processFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
+                             VerboseLogger logger, CleanupResult totalResult) {
+        logger.log("Processing: " + javaFile.getName());
+
+        CompilationUnit cu = parser.parseFile(javaFile.getAbsolutePath());
+        if (cu == null) {
+            logger.log("  Skipped: Could not parse file");
+            return;
+        }
+
+        AnnotationCleaner.CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
+
+        if (result.getRemovedAnnotations() > 0 || result.getRemovedImports() > 0) {
+            logger.log("  Removed " + result.getRemovedAnnotations() + " @TestId annotations");
+            logger.log("  Removed " + result.getRemovedImports() + " TestId imports");
+
+            if (!dryRun) {
+                saveFile(cu);
             }
-        }
 
-        return annotationsToProcess.size();
+            totalResult.addResults(result.getRemovedAnnotations(), result.getRemovedImports(), 1);
+        } else {
+            logger.log("  No @TestId annotations or imports found");
+        }
     }
 
-    private String extractTestIdValue(AnnotationExpr annotation) {
-        if (annotation instanceof SingleMemberAnnotationExpr) {
-            SingleMemberAnnotationExpr singleMember = (SingleMemberAnnotationExpr) annotation;
-            if (singleMember.getMemberValue() instanceof StringLiteralExpr) {
-                StringLiteralExpr stringLiteral = (StringLiteralExpr) singleMember.getMemberValue();
-                return stringLiteral.getValue();
-            }
-        }
-        return null;
-    }
-
-    private int removeUnusedTestIdImports(CompilationUnit cu) {
-        boolean hasTestIdAnnotations = cu.findAll(MethodDeclaration.class).stream()
-                .flatMap(method -> method.getAnnotations().stream())
-                .anyMatch(annotation -> TEST_ID_ANNOTATION.equals(annotation.getNameAsString()));
-
-        if (hasTestIdAnnotations) {
-            return 0;
-        }
-
-        List<ImportDeclaration> importsToRemove = cu.getImports().stream()
-                .filter(importDecl -> TEST_ID_IMPORT.equals(importDecl.getNameAsString()))
-                .collect(Collectors.toList());
-
-        if (!dryRun) {
-            importsToRemove.forEach(ImportDeclaration::remove);
-        }
-
-        return importsToRemove.size();
-    }
-
-    private void saveFile(CompilationUnit cu, Path file) {
+    private void saveFile(CompilationUnit cu) {
         cu.getStorage().ifPresent(storage -> {
             try {
                 storage.save();
             } catch (Exception e) {
-                throw new CliException("Failed to save file: " + file, e);
+                throw new CliException("Failed to save file: " + storage.getPath(), e);
             }
         });
     }
 
-    private void printSummary(int totalProcessedAnnotations,
-                              int totalRemovedImports,
-                              int modifiedFiles) {
+    private void printSummary(CleanupResult result) {
         if (dryRun) {
             System.out.println("\nDry run completed. No files were modified.");
-            System.out.println("Found @TestId annotations: " + totalProcessedAnnotations);
+            System.out.println("Would remove:");
         } else {
-            System.out.println("\n✓ Clean-ids completed!");
+            System.out.println("\n✓ Cleanup completed!");
             System.out.println("Removed:");
-            System.out.println("  - @TestId annotations: " + totalProcessedAnnotations);
         }
 
-        if (totalRemovedImports > 0) {
-            if (dryRun) {
-                System.out.println("TestId imports that would be removed: " + totalRemovedImports);
-            } else {
-                System.out.println("  - TestId imports: " + totalRemovedImports);
-            }
-        }
-        System.out.println((dryRun ? "Files that would be processed: "
-                : "  - Files modified: ") + modifiedFiles);
+        System.out.println("  - @TestId annotations: " + result.getTotalAnnotations());
+        System.out.println("  - TestId imports: " + result.getTotalImports());
+        System.out.println("  - Modified files: " + result.getModifiedFiles());
+    }
 
-        if (dryRun && (serverUrl == null || serverUrl.trim().isEmpty())) {
-            System.out.println("\nRun the same command with TESTOMATIO_URL provided to execute.");
+    private void handleFileError(File javaFile, Exception e) {
+        System.err.println("Error processing " + javaFile.getName() + ": " + e.getMessage());
+        if (verbose) {
+            throw new CliException("Failed to process file: " + javaFile, e);
         }
     }
 
-    private void log(String message) {
+    private void handleError(String message, Exception e) {
+        System.err.println(message + ": " + e.getMessage());
         if (verbose) {
-            System.out.println(message);
+            throw new CliException("Failed to process file: " + message, e);
+        }
+        throw new CliException(message, e);
+    }
+
+    private static class CleanupResult {
+        private int totalAnnotations = 0;
+        private int totalImports = 0;
+        private int modifiedFiles = 0;
+
+        void addResults(int annotations, int imports, int files) {
+            this.totalAnnotations += annotations;
+            this.totalImports += imports;
+            this.modifiedFiles += files;
+        }
+
+        int getTotalAnnotations() {
+            return totalAnnotations;
+        }
+
+        int getTotalImports() {
+            return totalImports;
+        }
+
+        int getModifiedFiles() {
+            return modifiedFiles;
         }
     }
 }

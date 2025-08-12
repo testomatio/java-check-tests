@@ -3,10 +3,11 @@ package io.testomat.commands;
 import picocli.CommandLine;
 
 @CommandLine.Command(
-        name = "update-ids",
+        name = "sync",
+        aliases = {"update-ids"},
         description = "Run export then importId",
         mixinStandardHelpOptions = true)
-public class UpdateIdCommand implements Runnable {
+public class SyncCommand implements Runnable {
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
@@ -37,7 +38,7 @@ public class UpdateIdCommand implements Runnable {
     @Override
     public void run() {
         CommandLine parent = spec.parent().commandLine();
-        int code1 = parent.execute("export",
+        int code1 = parent.execute("import",
                 "--apikey=" + apiKey,
                 "--url=" + url,
                 "--directory=" + directory);
@@ -45,7 +46,7 @@ public class UpdateIdCommand implements Runnable {
             spec.commandLine().getErr().println("export failed with code " + code1);
             System.exit(code1);
         }
-        int code2 = parent.execute("import",
+        int code2 = parent.execute("pull-ids",
                 "--apikey=" + apiKey,
                 "--url=" + url,
                 "--directory=" + directory);

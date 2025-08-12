@@ -1,368 +1,163 @@
 package io.testomat.commands;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import io.testomat.client.CliClient;
-import io.testomat.client.TestomatHttpClient;
-import io.testomat.exception.CliException;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import io.testomat.service.DirectoryValidator;
+import io.testomat.service.JavaFileParser;
+import io.testomat.service.JsonBuilder;
+import io.testomat.service.TestExportService;
+import io.testomat.service.TestFileScanner;
+import io.testomat.service.TestFrameworkDetector;
+import io.testomat.service.TestMethodExtractor;
+import io.testomat.service.VerboseLogger;
+import java.io.File;
+import java.nio.file.FileSystems;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.concurrent.Callable;
 import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 
-@CommandLine.Command(name = "import", description = "Imports IDs into the codebase")
-public class ImportCommand implements Runnable {
+@Command(
+        name = "import",
+        description = "Imports JUnit and TestNG test methods to testomat.io",
+        mixinStandardHelpOptions = true
+)
+public class ImportCommand implements Callable<Integer> {
 
-    private static final int EXPECTED_PARTS_COUNT = 3;
-    private static final int PATH_INDEX = 0;
-    private static final int CLASS_NAME_INDEX = 1;
-    private static final int METHOD_NAME_INDEX = 2;
-    private static final String JAVA_EXTENSION = ".java";
-    private static final String SPLIT_DELIMITER = "#";
-    private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
-    private static final String TEST_ID_ANNOTATION = "TestId";
-    private static final String TEST_ID_PREFIX = "@T";
-    private static final String TESTS_FIELD = "tests";
+    private static final String CURRENT_DIRECTORY = ".";
+    private static final int SUCCESS_EXIT_CODE = 0;
+    private static final int ERROR_EXIT_CODE = 1;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final TestomatHttpClient httpClient;
-    private final JavaParser javaParser;
+    private final DirectoryValidator validator;
+    private final TestFileScanner scanner;
 
-    @CommandLine.Option(
-            names = {"--directory", "-d"},
+    private TestExportService.ExportConfig config;
+
+    @Option(
+            names = {"-d", "--directory"},
+            description = "Directory to scan for test files (default: current directory)",
             defaultValue = ".")
-    private String directory;
+    private File directory = new File(CURRENT_DIRECTORY);
 
-    @CommandLine.Option(
-            names = {"--apikey", "-key"},
-            description = "Testomat project api key",
-            defaultValue = "${env:TESTOMATIO}",
-            required = true)
+    @Option(
+            names = {"-key", "--apikey"},
+            description = "API key for testomat.io",
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
-    @CommandLine.Option(
+    @Option(
             names = "--url",
             description = "Testomat server URL",
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
+    @Option(
+            names = {"-v", "--verbose"},
+            description = "Enable verbose output")
+    private boolean verbose = false;
+
+    @Option(
+            names = {"--dry-run"},
+            description = "Show what would be exported without sending")
+    private boolean dryRun = false;
+
     public ImportCommand() {
-        this.httpClient = new CliClient();
-        this.javaParser = new JavaParser();
+        this.validator = new DirectoryValidator();
+        this.scanner = new TestFileScanner();
     }
 
-    public ImportCommand(TestomatHttpClient httpClient, JavaParser javaParser,
-                         String directory, String apiKey, String serverUrl) {
-        this.httpClient = httpClient;
-        this.javaParser = javaParser;
-        this.directory = directory;
-        this.apiKey = apiKey;
-        this.serverUrl = serverUrl;
-    }
-
-    public static void main(String[] args) {
-        CommandLine.run(new ImportCommand(), args);
+    public ImportCommand(DirectoryValidator validator, TestFileScanner scanner) {
+        this.validator = validator;
+        this.scanner = scanner;
     }
 
     @Override
-    public void run() {
-        String response = httpClient.sendGetRequest(apiKey, serverUrl);
-        Map<String, String> testsMap = parseTestsFromResponse(response);
-        List<CompilationUnit> compilationUnits = loadCompilationUnits();
-
-        int processedCount = processTestMethods(compilationUnits, testsMap);
-        saveModifiedFiles(compilationUnits);
-
-        System.out.println("Processed " + processedCount + " test methods");
-        System.out.println("Saved modified files");
-    }
-
-    private Map<String, String> parseTestsFromResponse(String response) {
-        JsonNode rootNode = parseJsonResponse(response);
-        JsonNode testsNode = extractTestsNode(rootNode);
-        Map<String, String> testsMap = convertTestsNodeToMap(testsNode);
-
-        validateTestsMap(testsMap);
-
-        return filterJavaTests(testsMap);
-    }
-
-    private JsonNode parseJsonResponse(String response) {
+    public Integer call() throws Exception {
         try {
-            return objectMapper.readTree(response);
-        } catch (JsonProcessingException e) {
-            throw new CliException(e.getMessage(), e.getCause());
-        }
-    }
+            VerboseLogger logger = new VerboseLogger(verbose);
 
-    private JsonNode extractTestsNode(JsonNode rootNode) {
-        JsonNode testsNode = rootNode.get(TESTS_FIELD);
-
-        if (testsNode == null) {
-            throw new CliException("Response does not contain '" + TESTS_FIELD + "' field");
-        }
-
-        if (!testsNode.isObject()) {
-            throw new CliException("'" + TESTS_FIELD + "' field is not a JSON object");
-        }
-
-        return testsNode;
-    }
-
-    private Map<String, String> convertTestsNodeToMap(JsonNode testsNode) {
-        try {
-            return objectMapper.convertValue(testsNode, new TypeReference<Map<String, String>>() {
-            });
-        } catch (IllegalArgumentException e) {
-            throw new CliException("Failed to convert tests data: " + e.getMessage(), e);
-        }
-    }
-
-    private void validateTestsMap(Map<String, String> testsMap) {
-        if (testsMap == null || testsMap.isEmpty()) {
-            throw new CliException("No tests found in response");
-        }
-    }
-
-    private Map<String, String> filterJavaTests(Map<String, String> testsMap) {
-        return testsMap.entrySet().stream()
-                .filter(entry -> entry.getKey().contains(JAVA_EXTENSION))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    private List<CompilationUnit> loadCompilationUnits() {
-        List<Path> javaFiles = findJavaFiles();
-        List<CompilationUnit> compilationUnits = parseJavaFiles(javaFiles);
-
-        if (compilationUnits.isEmpty()) {
-            throw new CliException("No compilation units found");
-        }
-
-        return compilationUnits;
-    }
-
-    private List<Path> findJavaFiles() {
-
-        try (Stream<Path> pathStream = Files.walk(Paths.get(directory))) {
-            return pathStream
-                    .filter(path -> path.toString().endsWith(JAVA_EXTENSION))
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            throw new CliException("Failed to scan directory for Java files", e);
-        }
-    }
-
-    private List<CompilationUnit> parseJavaFiles(List<Path> javaFiles) {
-        return javaFiles.stream()
-                .map(this::parseJavaFile)
-                .collect(Collectors.toList());
-    }
-
-    private CompilationUnit parseJavaFile(Path javaFile) {
-        validateFileAccess(javaFile);
-
-        try {
-            return javaParser.parse(javaFile)
-                    .getResult()
-                    .orElseThrow(() -> new CliException("Could not parse file " + javaFile));
-        } catch (IOException e) {
-            throw new CliException("Could not parse file " + javaFile, e);
-        }
-    }
-
-    private void validateFileAccess(Path file) {
-        if (!Files.exists(file)) {
-            throw new CliException("File does not exist: " + file);
-        }
-
-        if (!Files.isRegularFile(file)) {
-            throw new CliException("Path is not a regular file: " + file);
-        }
-
-        if (!Files.isReadable(file)) {
-            throw new CliException("File is not readable: " + file);
-        }
-    }
-
-    private int processTestMethods(List<CompilationUnit> compilationUnits,
-                                   Map<String, String> testsMap) {
-        int processedCount = 0;
-
-        for (Map.Entry<String, String> testEntry : testsMap.entrySet()) {
-            String testKey = testEntry.getKey();
-            String testId = testEntry.getValue();
-
-            TestMethodInfo methodInfo = parseTestKey(testKey);
-            if (methodInfo == null) {
-                continue;
+            boolean noDryRunFlag = !dryRun;
+            if (noDryRunFlag && (apiKey == null || apiKey.trim().isEmpty())) {
+                logger.log("TESTOMATIO API key not provided, running in dry-run mode");
+                dryRun = true;
             }
 
-            Optional<MethodDeclaration> methodOptional =
-                    findMethodInCompilationUnits(compilationUnits, methodInfo);
-
-            if (methodOptional.isPresent()) {
-                MethodDeclaration method = methodOptional.get();
-                CompilationUnit compilationUnit = method.findCompilationUnit().orElse(null);
-
-                if (compilationUnit != null) {
-                    addTestIdAnnotationToMethod(method, testId);
-                    ensureTestIdImportExists(compilationUnit);
-                    processedCount++;
-                }
+            if (verbose) {
+                logPlatformInfo(logger);
             }
-        }
+            logger.log("Starting test export from directory: " + directory.getAbsolutePath());
 
-        return processedCount;
+            validator.validateDirectory(directory);
+
+            List<File> testFiles = scanner.findTestFiles(directory);
+            logger.log("Found " + testFiles.size() + " test files");
+
+            if (testFiles.isEmpty()) {
+                System.out.println("No test files found!");
+                return SUCCESS_EXIT_CODE;
+            }
+
+            config = new TestExportService.ExportConfig(
+                    apiKey, serverUrl, dryRun, verbose);
+
+            TestExportService exportService = createExportService(logger);
+            TestExportService.ExportResult result =
+                    exportService.processTestFiles(testFiles, config);
+
+            printCompletionMessage(result.getTotalExported());
+
+            return SUCCESS_EXIT_CODE;
+
+        } catch (Exception e) {
+            System.err.println("Export failed: " + e.getMessage());
+            if (verbose) {
+                e.printStackTrace();
+            }
+            return ERROR_EXIT_CODE;
+        }
     }
 
-    private TestMethodInfo parseTestKey(String testKey) {
-        String[] parts = testKey.split(SPLIT_DELIMITER);
-
-        if (parts.length != EXPECTED_PARTS_COUNT) {
-            return null;
-        }
-
-        return new TestMethodInfo(
-                parts[PATH_INDEX],
-                parts[CLASS_NAME_INDEX],
-                parts[METHOD_NAME_INDEX]
+    private TestExportService createExportService(VerboseLogger logger) {
+        return new TestExportService(
+                new JavaFileParser(),
+                new TestMethodExtractor(),
+                new TestFrameworkDetector(),
+                new JsonBuilder(),
+                new CliClient(),
+                logger
         );
     }
 
-    private Optional<MethodDeclaration> findMethodInCompilationUnits(
-            List<CompilationUnit> compilationUnits, TestMethodInfo methodInfo) {
-        String expectedFileName = extractFileName(methodInfo.filePath);
-
-        return compilationUnits.stream()
-                .filter(cu -> isMatchingFile(cu, expectedFileName))
-                .flatMap(cu -> findMethodsInCompilationUnit(cu, methodInfo).stream())
-                .findFirst();
-    }
-
-    private boolean isMatchingFile(CompilationUnit compilationUnit, String expectedFileName) {
-        return compilationUnit.getStorage()
-                .map(storage -> storage.getPath().getFileName()
-                        .toString().equals(expectedFileName))
-                .orElse(false);
-    }
-
-    private List<MethodDeclaration> findMethodsInCompilationUnit(CompilationUnit compilationUnit,
-                                                                 TestMethodInfo methodInfo) {
-        return compilationUnit.findAll(MethodDeclaration.class)
-                .stream()
-                .filter(method -> method.getNameAsString().equals(methodInfo.methodName))
-                .filter(method -> isMethodInCorrectClass(method, methodInfo.className))
-                .collect(Collectors.toList());
-    }
-
-    private boolean isMethodInCorrectClass(MethodDeclaration method, String expectedClassName) {
-        return method.findAncestor(ClassOrInterfaceDeclaration.class)
-                .map(classDecl -> classDecl.getNameAsString().equals(expectedClassName))
-                .orElse(false);
-    }
-
-    private String extractFileName(String filePath) {
-        return Paths.get(filePath).getFileName().toString();
-    }
-
-    private void addTestIdAnnotationToMethod(MethodDeclaration method, String testId) {
-        String cleanTestId = cleanTestIdValue(testId);
-        Optional<AnnotationExpr> existingAnnotation =
-                method.getAnnotationByName(TEST_ID_ANNOTATION);
-
-        if (existingAnnotation.isPresent()) {
-            updateExistingTestIdAnnotation(existingAnnotation.get(), method, cleanTestId);
-        } else {
-            addNewTestIdAnnotation(method, cleanTestId);
-        }
-    }
-
-    private String cleanTestIdValue(String testId) {
-        return testId.replace(TEST_ID_PREFIX, "");
-    }
-
-    private void updateExistingTestIdAnnotation(AnnotationExpr existingAnnotation,
-                                                MethodDeclaration method, String cleanTestId) {
-        if (existingAnnotation.isSingleMemberAnnotationExpr()) {
-            updateSingleMemberAnnotation(existingAnnotation.asSingleMemberAnnotationExpr(),
-                    cleanTestId);
-        } else {
-            replaceAnnotation(method, cleanTestId);
-        }
-    }
-
-    private void updateSingleMemberAnnotation(SingleMemberAnnotationExpr annotation,
-                                              String cleanTestId) {
-        Expression currentValue = annotation.getMemberValue();
-
-        if (currentValue.isStringLiteralExpr()) {
-            StringLiteralExpr stringLiteral = currentValue.asStringLiteralExpr();
-            if (!stringLiteral.getValue().equals(cleanTestId)) {
-                annotation.setMemberValue(new StringLiteralExpr(cleanTestId));
+    private void printCompletionMessage(int totalExported) {
+        if (dryRun) {
+            System.out.println("\nDry run completed. No data was sent to server.");
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                System.out.println("Run the same command with apikey and url provided to execute.");
             }
         } else {
-            annotation.setMemberValue(new StringLiteralExpr(cleanTestId));
+            System.out.println("\n✓ Export completed! Total methods exported: " + totalExported);
         }
     }
 
-    private void replaceAnnotation(MethodDeclaration method, String cleanTestId) {
-        method.getAnnotationByName(TEST_ID_ANNOTATION).ifPresent(method::remove);
-        addNewTestIdAnnotation(method, cleanTestId);
+    private void logPlatformInfo(VerboseLogger logger) {
+        final String os = System.getProperty("os.name");
+        final String osVersion = System.getProperty("os.version");
+        final String osArch = System.getProperty("os.arch");
+        final String javaVersion = System.getProperty("java.version");
+        final String javaVendor = System.getProperty("java.vendor");
+        final String userDir = System.getProperty("user.dir");
+        final String fileSeparator = FileSystems.getDefault().getSeparator();
+
+        logger.log("=== Platform Information ===");
+        logger.log("OS: " + os + " " + osVersion + " (" + osArch + ")");
+        logger.log("Java: " + javaVersion + " (" + javaVendor + ")");
+        logger.log("Working directory: " + userDir);
+        logger.log("File separator: '" + fileSeparator + "'");
+        logger.log("===========================");
     }
 
-    private void addNewTestIdAnnotation(MethodDeclaration method, String cleanTestId) {
-        SingleMemberAnnotationExpr newAnnotation = new SingleMemberAnnotationExpr(
-                new Name(TEST_ID_ANNOTATION),
-                new StringLiteralExpr(cleanTestId)
-        );
-        method.addAnnotation(newAnnotation);
-    }
-
-    private void ensureTestIdImportExists(CompilationUnit compilationUnit) {
-        boolean hasTestIdImport = compilationUnit.getImports().stream()
-                .anyMatch(importDecl
-                        -> TEST_ID_IMPORT.equals(importDecl.getNameAsString()));
-
-        if (!hasTestIdImport) {
-            ImportDeclaration testIdImport =
-                    new ImportDeclaration(TEST_ID_IMPORT, false, false);
-            compilationUnit.addImport(testIdImport);
-        }
-    }
-
-    private void saveModifiedFiles(List<CompilationUnit> compilationUnits) {
-        compilationUnits.forEach(cu ->
-                cu.getStorage().ifPresent(CompilationUnit.Storage::save)
-        );
-    }
-
-    private static class TestMethodInfo {
-        private final String filePath;
-        private final String className;
-        private final String methodName;
-
-        TestMethodInfo(String filePath, String className, String methodName) {
-            this.filePath = filePath;
-            this.className = className;
-            this.methodName = methodName;
-        }
+    public static void main(String[] args) {
+        int exitCode = new CommandLine(new ImportCommand()).execute(args);
+        System.exit(exitCode);
     }
 }

@@ -4,32 +4,31 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 
 @Command(
-        name = "java -jar java-check-tests-{version}",
-        description = "[Java-check-tests] v0.1.0",
+        name = "main",
         mixinStandardHelpOptions = true,
-        version = "0.1.0",
         subcommands = {
-                TestExportCommand.class,
                 ImportCommand.class,
+                PullIdsCommand.class,
                 CommandLine.HelpCommand.class,
-                UpdateIdCommand.class,
-                PurgeCommand.class,
-                CleanIdsCommand.class
+                SyncCommand.class,
+                CleanIdsCommand.class,
         }
 )
 public class TestomatCliCommand implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("Testomat.io CLI v0.1.0");
+        System.out.println("Testomat.io CLI v0.1.x");
         System.out.println();
         System.out.println("Available commands:");
-        System.out.println("  export     - Export JUnit and TestNG test methods to testomat.io");
-        System.out.println("  import - Import test IDs into the codebase");
-        System.out.println("  purge      - Remove @TestId annotations and imports from test files");
+        System.out.println("  import     - Export JUnit and TestNG test methods to testomat.io");
+        System.out.println("  pull-ids - Import test IDs into the codebase");
+        System.out.println("  clean-ids      - Remove @TestId annotations and "
+                + "imports from test files");
         System.out.println(
-                "  clean-ids  - Remove @TestId annotations for tests that exist on the server");
-        System.out.println("  update-ids        - Run export then update-ids");
+                "  clean-project-ids  - Remove @TestId annotations for tests "
+                        + "that exist on the server");
+        System.out.println("  sync        - Run export then update-ids. Alias `update-ids`");
         System.out.println("  help       - Show help information");
         System.out.println();
         System.out.println("Use ' <command> --help' for more information on a command.");
