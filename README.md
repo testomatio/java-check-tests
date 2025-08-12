@@ -6,8 +6,8 @@ Command-line interface for the Testomat.io Java Reporter library.
 
 This CLI tool can be used to:
 
-- Export your test source code to the server
-- Import test IDs from the server into your codebase
+- Import your test source code to Testomat.io
+- Sync test IDs between Testomat.io porject and your codebase
 - Remove test IDs when needed
 
 ---
