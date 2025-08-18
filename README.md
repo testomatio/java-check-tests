@@ -52,6 +52,58 @@ Convenience command for typical workflow.
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
+
+### Test class before sync
+```java
+    package com.library.model.junit.parameterizedtests;
+    
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvFileSource;
+    import static org.junit.jupiter.api.Assertions.*;
+    
+    public class CsvFileSourceParameterizedTests {
+
+        @ParameterizedTest
+        @CsvFileSource(resources = "/com/library/model/junit/parameterizedtests/users.csv", numLinesToSkip = 1)
+        void testUserDataValidation(String username, int age, String email) {
+            assertNotNull(username);
+            assertNotNull(email);
+            assertTrue(age > 0);
+            assertTrue(username.length() >= 3);
+            assertTrue(email.contains("@"));
+            assertTrue(age >= 18);
+        }
+    }
+```
+### Sync console report
+![syncRunResul image](img/syncRunConsoleResult.png)
+
+### Sync result
+```java
+    package com.library.model.junit.parameterizedtests;
+    
+    import static org.junit.jupiter.api.Assertions.*;
+    
+    import io.testomat.core.annotation.TestId; // <== Import added
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvFileSource;
+    
+    public class CsvFileSourceParameterizedTests {
+    
+        @ParameterizedTest
+        @CsvFileSource(resources = "/com/library/model/junit/parameterizedtests/users.csv", numLinesToSkip = 1)
+        @TestId("d32625e6")  // <== TestId added(or updated)
+        void testUserDataValidation(String username, int age, String email) {
+            assertNotNull(username);
+            assertNotNull(email);
+            assertTrue(age > 0);
+            assertTrue(username.length() >= 3);
+            assertTrue(email.contains("@"));
+            assertTrue(age >= 18);
+        }
+    }    
+```
+
 ### `clean-ids`
 
 Removes `@TestId` annotations and related imports from all classes in the directory recursively.  
