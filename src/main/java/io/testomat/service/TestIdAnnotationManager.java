@@ -9,6 +9,8 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -21,12 +23,60 @@ public class TestIdAnnotationManager {
 
     public Optional<MethodDeclaration> findMethodInCompilationUnits(
             List<CompilationUnit> compilationUnits, TestMethodInfo methodInfo) {
-        String expectedFileName = extractFileName(methodInfo.getFilePath());
+        return findMethodInCompilationUnits(compilationUnits, methodInfo, false);
+    }
 
-        return compilationUnits.stream()
-                .filter(cu -> isMatchingFile(cu, expectedFileName))
-                .flatMap(cu -> findMethodsInCompilationUnit(cu, methodInfo).stream())
+    public Optional<MethodDeclaration> findMethodInCompilationUnits(
+            List<CompilationUnit> compilationUnits, TestMethodInfo methodInfo, boolean verbose) {
+        
+        if (verbose) {
+            System.out.println("  Looking for method: " + methodInfo.getMethodName()
+                             + " in class: " + methodInfo.getClassName()
+                             + " from file: " + methodInfo.getFilePath());
+        }
+
+        // Try multiple matching strategies in order of preference
+        Optional<MethodDeclaration> result;
+
+        // Strategy 1: Try exact filename match
+        String expectedFileName = extractFileName(methodInfo.getFilePath());
+        result = compilationUnits.stream()
+                .filter(cu -> isMatchingFile(cu, expectedFileName, verbose))
+                .flatMap(cu -> findMethodsInCompilationUnit(cu, methodInfo, verbose).stream())
                 .findFirst();
+
+        if (result.isPresent()) {
+            if (verbose) {
+                System.out.println("  Found method using exact filename match");
+            }
+            return result;
+        }
+
+        // Strategy 2: Try path-based matching with normalized paths
+        result = compilationUnits.stream()
+                .filter(cu -> isMatchingFileByPath(cu, methodInfo.getFilePath(), verbose))
+                .flatMap(cu -> findMethodsInCompilationUnit(cu, methodInfo, verbose).stream())
+                .findFirst();
+
+        if (result.isPresent()) {
+            if (verbose) {
+                System.out.println("  Found method using path-based matching");
+            }
+            return result;
+        }
+
+        if (verbose) {
+            System.out.println("  Method not found in any compilation unit");
+            System.out.println("  Available compilation units:");
+            for (CompilationUnit cu : compilationUnits) {
+                String fileName = cu.getStorage()
+                        .map(storage -> storage.getPath().getFileName().toString())
+                        .orElse("Unknown");
+                System.out.println("    - " + fileName);
+            }
+        }
+
+        return Optional.empty();
     }
 
     public void addTestIdAnnotationToMethod(MethodDeclaration method, String testId) {
@@ -54,30 +104,110 @@ public class TestIdAnnotationManager {
     }
 
     private boolean isMatchingFile(CompilationUnit compilationUnit, String expectedFileName) {
-        return compilationUnit.getStorage()
+        return isMatchingFile(compilationUnit, expectedFileName, false);
+    }
+
+    private boolean isMatchingFile(CompilationUnit compilationUnit, String expectedFileName,
+                                    boolean verbose) {
+        boolean matches = compilationUnit.getStorage()
                 .map(storage -> storage.getPath()
                         .getFileName()
                         .toString()
                         .equals(expectedFileName))
                 .orElse(false);
+        
+        if (verbose) {
+            String actualFileName = compilationUnit.getStorage()
+                    .map(storage -> storage.getPath().getFileName().toString())
+                    .orElse("Unknown");
+            System.out.println("    Checking file: " + actualFileName + " vs expected: "
+                    + expectedFileName + " -> " + matches);
+        }
+        
+        return matches;
+    }
+
+    private boolean isMatchingFileByPath(CompilationUnit compilationUnit, String expectedPath,
+                                          boolean verbose) {
+        return compilationUnit.getStorage()
+                .map(storage -> {
+                    Path actualPath = storage.getPath().normalize();
+                    Path expectedNormalizedPath = Paths.get(expectedPath).normalize();
+                    
+                    // Try exact match first
+                    boolean exactMatch = actualPath.equals(expectedNormalizedPath);
+                    if (exactMatch) {
+                        if (verbose) {
+                            System.out.println("    Path exact match: " + actualPath);
+                        }
+                        return true;
+                    }
+                    
+                    // Try ending match (handles different root paths)
+                    String actualPathStr = actualPath.toString().replace('\\', '/');
+                    String expectedPathStr = expectedNormalizedPath.toString().replace('\\', '/');
+                    
+                    boolean endsWithMatch = actualPathStr.endsWith(expectedPathStr)
+                                          || expectedPathStr.endsWith(actualPathStr);
+                    
+                    if (verbose) {
+                        System.out.println("    Path comparison: " + actualPathStr + " vs "
+                                + expectedPathStr + " -> " + endsWithMatch);
+                    }
+                    
+                    return endsWithMatch;
+                })
+                .orElse(false);
     }
 
     private List<MethodDeclaration> findMethodsInCompilationUnit(CompilationUnit compilationUnit,
                                                                  TestMethodInfo methodInfo) {
-        return compilationUnit.findAll(MethodDeclaration.class)
-                .stream()
-                .filter(method ->
-                        method.getNameAsString().equals(methodInfo.getMethodName()))
-                .filter(method ->
-                        isMethodInCorrectClass(method, methodInfo.getClassName()))
+        return findMethodsInCompilationUnit(compilationUnit, methodInfo, false);
+    }
+
+    private List<MethodDeclaration> findMethodsInCompilationUnit(
+            CompilationUnit compilationUnit, TestMethodInfo methodInfo, boolean verbose) {
+        List<MethodDeclaration> allMethods = compilationUnit.findAll(MethodDeclaration.class);
+        
+        List<MethodDeclaration> matchingMethods = allMethods.stream()
+                .filter(method -> method.getNameAsString().equals(methodInfo.getMethodName()))
+                .filter(method -> isMethodInCorrectClass(method, methodInfo.getClassName(),
+                        verbose))
                 .collect(Collectors.toList());
+        
+        if (verbose) {
+            System.out.println("    Found " + allMethods.size() + " total methods, "
+                             + matchingMethods.size() + " matching methods");
+        }
+        
+        return matchingMethods;
     }
 
     private boolean isMethodInCorrectClass(MethodDeclaration method, String expectedClassName) {
-        return method.findAncestor(ClassOrInterfaceDeclaration.class)
-                .map(classDecl ->
-                        classDecl.getNameAsString().equals(expectedClassName))
-                .orElse(false);
+        return isMethodInCorrectClass(method, expectedClassName, false);
+    }
+
+    private boolean isMethodInCorrectClass(MethodDeclaration method, String expectedClassName,
+                                            boolean verbose) {
+        Optional<ClassOrInterfaceDeclaration> classDecl = method
+                .findAncestor(ClassOrInterfaceDeclaration.class);
+        
+        if (classDecl.isPresent()) {
+            String actualClassName = classDecl.get().getNameAsString();
+            boolean matches = actualClassName.equals(expectedClassName);
+            
+            if (verbose) {
+                System.out.println("      Class match: " + actualClassName + " vs "
+                        + expectedClassName + " -> " + matches);
+            }
+            
+            return matches;
+        } else {
+            if (verbose) {
+                System.out.println("      Method has no containing class");
+            }
+            return false;
+        }
     }
 
     private String extractFileName(String filePath) {

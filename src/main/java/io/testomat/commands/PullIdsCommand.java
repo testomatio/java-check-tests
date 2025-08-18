@@ -37,6 +37,11 @@ public class PullIdsCommand implements Runnable {
             defaultValue = "${env:TESTOMATIO_URL}")
     private String serverUrl;
 
+    @CommandLine.Option(
+            names = {"-v", "--verbose"},
+            description = "Enable verbose output")
+    private boolean verbose = false;
+
     public PullIdsCommand() {
         this.javaParser = new JavaParser();
     }
@@ -50,8 +55,12 @@ public class PullIdsCommand implements Runnable {
         TestIdSyncService syncService = createSyncService();
         List<CompilationUnit> compilationUnits = loadCompilationUnits();
 
+        if (verbose) {
+            System.out.println("Found " + compilationUnits.size() + " compilation units");
+        }
+
         TestIdSyncService.SyncResult result =
-                syncService.syncTestIds(apiKey, serverUrl, compilationUnits);
+                syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose);
 
         System.out.println("Processed " + result.getProcessedCount() + " test methods");
         System.out.println("Saved modified files");
