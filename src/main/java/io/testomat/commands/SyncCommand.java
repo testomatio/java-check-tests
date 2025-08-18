@@ -56,13 +56,6 @@ public class SyncCommand implements Runnable {
             System.exit(code1);
         }
         
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("Interrupted while waiting");
-        }
-        
         String[] pullIdsArgs = verbose 
             ? new String[]{"pull-ids", "--apikey=" + apiKey, "--url=" + url, 
                     "--directory=" + directory, "-v"}
@@ -74,20 +67,6 @@ public class SyncCommand implements Runnable {
         if (code2 != 0) {
             spec.commandLine().getErr().println("pull-ids (1st run) failed with code " + code2);
             System.exit(code2);
-        }
-
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("Interrupted while waiting");
-        }
-        
-        System.out.println("Running pull-ids fallback...");
-        int code3 = parent.execute(pullIdsArgs);
-        if (code3 != 0) {
-            spec.commandLine().getErr().println("pull-ids fallback failed with code " + code3);
-            System.exit(code3);
         }
     }
 }
