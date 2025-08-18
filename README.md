@@ -52,6 +52,8 @@ Convenience command for typical workflow.
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
+**Please note:** if not all the tests have been annotated with @TestId after the sync command -  
+simply rerun the command.
 
 ### Test class before sync
 ```java
@@ -142,14 +144,14 @@ You can use these oneliners to **download and update ids** in one move
 ```bash
   export TESTOMATIO_URL=... && \
   export TESTOMATIO=... && \
-  curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && \
+  curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar && \
   java -jar testomatio.jar sync
 ```
 >- WINDOWS cdm:  
 ```cmd
     set TESTOMATIO_URL=...&& ^
     set TESTOMATIO=...&& ^
-    curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& ^
+    curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar&& ^
     java -jar testomatio.jar sync
 ```
 **Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
