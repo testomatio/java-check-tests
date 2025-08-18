@@ -52,6 +52,60 @@ Convenience command for typical workflow.
 >- `--url` - Server URL (required)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
+**Please note:** if not all the tests have been annotated with @TestId after the sync command -  
+simply rerun the command.
+
+### Test class before sync
+```java
+    package com.library.model.junit.parameterizedtests;
+    
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvFileSource;
+    import static org.junit.jupiter.api.Assertions.*;
+    
+    public class CsvFileSourceParameterizedTests {
+
+        @ParameterizedTest
+        @CsvFileSource(resources = "/com/library/model/junit/parameterizedtests/users.csv", numLinesToSkip = 1)
+        void testUserDataValidation(String username, int age, String email) {
+            assertNotNull(username);
+            assertNotNull(email);
+            assertTrue(age > 0);
+            assertTrue(username.length() >= 3);
+            assertTrue(email.contains("@"));
+            assertTrue(age >= 18);
+        }
+    }
+```
+### Sync console report
+![syncRunResul image](img/syncRunConsoleResult.png)
+
+### Sync result
+```java
+    package com.library.model.junit.parameterizedtests;
+    
+    import static org.junit.jupiter.api.Assertions.*;
+    
+    import io.testomat.core.annotation.TestId; // <== Import added
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvFileSource;
+    
+    public class CsvFileSourceParameterizedTests {
+    
+        @ParameterizedTest
+        @CsvFileSource(resources = "/com/library/model/junit/parameterizedtests/users.csv", numLinesToSkip = 1)
+        @TestId("d32625e6")  // <== TestId added(or updated)
+        void testUserDataValidation(String username, int age, String email) {
+            assertNotNull(username);
+            assertNotNull(email);
+            assertTrue(age > 0);
+            assertTrue(username.length() >= 3);
+            assertTrue(email.contains("@"));
+            assertTrue(age >= 18);
+        }
+    }    
+```
+
 ### `clean-ids`
 
 Removes `@TestId` annotations and related imports from all classes in the directory recursively.  
@@ -90,14 +144,14 @@ You can use these oneliners to **download and update ids** in one move
 ```bash
   export TESTOMATIO_URL=... && \
   export TESTOMATIO=... && \
-  curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar && \
+  curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar && \
   java -jar testomatio.jar sync
 ```
 >- WINDOWS cdm:  
 ```cmd
     set TESTOMATIO_URL=...&& ^
     set TESTOMATIO=...&& ^
-    curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/java-check-tests.jar&& ^
+    curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar&& ^
     java -jar testomatio.jar sync
 ```
 **Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
