@@ -32,27 +32,62 @@ public class SyncCommand implements Runnable {
     )
     private String directory;
 
+    @CommandLine.Option(
+            names = {"-v", "--verbose"},
+            description = "Enable verbose output")
+    private boolean verbose = false;
+
     @CommandLine.Spec
     private CommandLine.Model.CommandSpec spec;
 
     @Override
     public void run() {
         CommandLine parent = spec.parent().commandLine();
-        int code1 = parent.execute("import",
-                "--apikey=" + apiKey,
-                "--url=" + url,
-                "--directory=" + directory);
+        
+        String[] importArgs = verbose 
+            ? new String[]{"import", "--apikey=" + apiKey, "--url=" + url, 
+                    "--directory=" + directory, "-v"}
+            : new String[]{"import", "--apikey=" + apiKey, "--url=" + url, 
+                    "--directory=" + directory};
+            
+        int code1 = parent.execute(importArgs);
         if (code1 != 0) {
-            spec.commandLine().getErr().println("export failed with code " + code1);
+            spec.commandLine().getErr().println("import failed with code " + code1);
             System.exit(code1);
         }
-        int code2 = parent.execute("pull-ids",
-                "--apikey=" + apiKey,
-                "--url=" + url,
-                "--directory=" + directory);
+        
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Interrupted while waiting");
+        }
+        
+        String[] pullIdsArgs = verbose 
+            ? new String[]{"pull-ids", "--apikey=" + apiKey, "--url=" + url, 
+                    "--directory=" + directory, "-v"}
+            : new String[]{"pull-ids", "--apikey=" + apiKey, "--url=" + url, 
+                    "--directory=" + directory};
+            
+        System.out.println("Running pull-ids (1st time)...");
+        int code2 = parent.execute(pullIdsArgs);
         if (code2 != 0) {
-            spec.commandLine().getErr().println("importId failed with code " + code2);
+            spec.commandLine().getErr().println("pull-ids (1st run) failed with code " + code2);
             System.exit(code2);
+        }
+
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Interrupted while waiting");
+        }
+        
+        System.out.println("Running pull-ids fallback...");
+        int code3 = parent.execute(pullIdsArgs);
+        if (code3 != 0) {
+            spec.commandLine().getErr().println("pull-ids fallback failed with code " + code3);
+            System.exit(code3);
         }
     }
 }

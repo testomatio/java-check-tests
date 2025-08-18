@@ -28,10 +28,20 @@ public class TestIdSyncService {
 
     public SyncResult syncTestIds(String apiKey, String serverUrl,
                                   List<CompilationUnit> compilationUnits) {
+        return syncTestIds(apiKey, serverUrl, compilationUnits, false);
+    }
+
+    public SyncResult syncTestIds(String apiKey, String serverUrl,
+                                  List<CompilationUnit> compilationUnits, boolean verbose) {
         String response = httpClient.sendGetRequest(apiKey, serverUrl);
         Map<String, String> testsMap = responseParser.parseTestsFromResponse(response);
 
-        int processedCount = processTestMethods(compilationUnits, testsMap);
+        System.out.println("Received " + testsMap.size() + " test entries from API");
+        if (verbose) {
+            System.out.println("Processing each test entry for annotation...");
+        }
+
+        int processedCount = processTestMethods(compilationUnits, testsMap, verbose);
         saveModifiedFiles(compilationUnits);
 
         return new SyncResult(processedCount);
@@ -39,19 +49,33 @@ public class TestIdSyncService {
 
     private int processTestMethods(List<CompilationUnit> compilationUnits,
                                    Map<String, String> testsMap) {
+        return processTestMethods(compilationUnits, testsMap, false);
+    }
+
+    private int processTestMethods(List<CompilationUnit> compilationUnits,
+                                   Map<String, String> testsMap, boolean verbose) {
         int processedCount = 0;
+        int skippedCount = 0;
 
         for (Map.Entry<String, String> testEntry : testsMap.entrySet()) {
             String testKey = testEntry.getKey();
             String testId = testEntry.getValue();
 
-            TestIdAnnotationManager.TestMethodInfo methodInfo = parseTestKey(testKey);
+            if (verbose) {
+                System.out.println("Processing test key: " + testKey + " -> " + testId);
+            }
+
+            TestIdAnnotationManager.TestMethodInfo methodInfo = parseTestKey(testKey, verbose);
             if (methodInfo == null) {
+                skippedCount++;
+                if (verbose) {
+                    System.out.println("  Skipped: Invalid test key format");
+                }
                 continue;
             }
 
-            Optional<MethodDeclaration> methodOptional =
-                    annotationManager.findMethodInCompilationUnits(compilationUnits, methodInfo);
+            Optional<MethodDeclaration> methodOptional = annotationManager
+                    .findMethodInCompilationUnits(compilationUnits, methodInfo, verbose);
 
             if (methodOptional.isPresent()) {
                 MethodDeclaration method = methodOptional.get();
@@ -61,25 +85,57 @@ public class TestIdSyncService {
                     annotationManager.addTestIdAnnotationToMethod(method, testId);
                     annotationManager.ensureTestIdImportExists(compilationUnit);
                     processedCount++;
+                    if (verbose) {
+                        System.out.println("  ✓ Added TestId annotation to method: "
+                                + methodInfo.getMethodName());
+                    }
+                } else {
+                    skippedCount++;
+                    if (verbose) {
+                        System.out.println("  Skipped: Method has no compilation unit");
+                    }
+                }
+            } else {
+                skippedCount++;
+                if (verbose) {
+                    System.out.println("  Skipped: Method not found in compilation units");
                 }
             }
+        }
+
+        System.out.println("Processed " + processedCount + " test methods");
+        if (skippedCount > 0) {
+            System.out.println("Skipped " + skippedCount + " test methods (not found or invalid)");
         }
 
         return processedCount;
     }
 
     private TestIdAnnotationManager.TestMethodInfo parseTestKey(String testKey) {
+        return parseTestKey(testKey, false);
+    }
+
+    private TestIdAnnotationManager.TestMethodInfo parseTestKey(String testKey, boolean verbose) {
         String[] parts = testKey.split(SPLIT_DELIMITER);
 
         if (parts.length != EXPECTED_PARTS_COUNT) {
+            if (verbose) {
+                System.out.println("  Invalid key format - expected 3 parts separated by '#', got "
+                        + parts.length + " parts: " + testKey);
+            }
             return null;
         }
 
-        return new TestIdAnnotationManager.TestMethodInfo(
-                parts[PATH_INDEX],
-                parts[CLASS_NAME_INDEX],
-                parts[METHOD_NAME_INDEX]
-        );
+        String filePath = parts[PATH_INDEX].trim();
+        String className = parts[CLASS_NAME_INDEX].trim();
+        String methodName = parts[METHOD_NAME_INDEX].trim();
+
+        if (verbose) {
+            System.out.println("  Parsed - File: " + filePath + ", Class: " + className
+                    + ", Method: " + methodName);
+        }
+
+        return new TestIdAnnotationManager.TestMethodInfo(filePath, className, methodName);
     }
 
     private void saveModifiedFiles(List<CompilationUnit> compilationUnits) {

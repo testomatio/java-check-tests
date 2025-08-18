@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.TestomatHttpClient;
 import io.testomat.model.TestCase;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 public class TestExportService {
@@ -27,18 +28,37 @@ public class TestExportService {
     }
 
     public ExportResult processTestFiles(List<File> testFiles, ExportConfig config) {
-        int totalExported = 0;
+        List<TestCase> allTestCases = new ArrayList<>();
+        String primaryFramework = null;
 
+        // First pass: collect all test cases from all files
         for (File testFile : testFiles) {
             try {
-                int exported = processTestFile(testFile, config);
-                totalExported += exported;
+                ProcessFileResult result = collectTestCasesFromFile(testFile);
+                if (result != null && !result.getTestCases().isEmpty()) {
+                    allTestCases.addAll(result.getTestCases());
+                    if (primaryFramework == null) {
+                        primaryFramework = result.getFramework();
+                    }
+                }
             } catch (Exception e) {
                 handleFileError(testFile, e, config.isVerbose());
             }
         }
 
-        return new ExportResult(totalExported);
+        if (allTestCases.isEmpty()) {
+            logger.log("No test methods found across all files");
+            return new ExportResult(0);
+        }
+
+        logger.log("Found " + allTestCases.size() + " total test methods across all files");
+
+        if (config.isDryRun()) {
+            printAllTestCases(allTestCases);
+            return new ExportResult(0);
+        } else {
+            return exportAllTestCases(allTestCases, primaryFramework, config);
+        }
     }
 
     private int processTestFile(File testFile, ExportConfig config) {
@@ -79,6 +99,60 @@ public class TestExportService {
         }
     }
 
+    private ProcessFileResult collectTestCasesFromFile(File testFile) {
+        logger.log("Processing: " + testFile.getName());
+
+        CompilationUnit compilationUnit = fileParser.parseFile(testFile.getAbsolutePath());
+        if (compilationUnit == null) {
+            logger.log("  Skipped: Could not parse file");
+            return null;
+        }
+
+        String framework = detector.detectFramework(compilationUnit);
+        if (framework == null) {
+            logger.log("  Skipped: No test framework detected");
+            return null;
+        }
+
+        logger.log("  Framework: " + framework);
+
+        List<TestCase> testCases = extractor.extractTestCases(
+                compilationUnit,
+                testFile.getAbsolutePath(),
+                framework
+        );
+
+        if (testCases.isEmpty()) {
+            logger.log("  Skipped: No test methods found");
+            return null;
+        }
+
+        logger.log("  Found " + testCases.size() + " test methods");
+        return new ProcessFileResult(testCases, framework);
+    }
+
+    private ExportResult exportAllTestCases(List<TestCase> allTestCases, String framework,
+                                             ExportConfig config) {
+        validateExportConfig(config);
+
+        String requestBody = jsonBuilder.buildRequestBody(allTestCases, framework);
+        String requestUrl = config.getServerUrl() + "/api/load?api_key=" + config.getApiKey();
+
+        httpClient.sendPostRequest(requestUrl, requestBody);
+
+        logger.log("✓ Exported " + allTestCases.size() + " test methods in single request");
+        return new ExportResult(allTestCases.size());
+    }
+
+    private void printAllTestCases(List<TestCase> testCases) {
+        System.out.println("All test methods found:");
+        for (TestCase testCase : testCases) {
+            System.out.println("  - " + testCase.getName()
+                    + " [" + String.join(", ", testCase.getLabels()) + "] "
+                    + "(" + testCase.getFile() + ")");
+        }
+    }
+
     private int exportTestCases(List<TestCase> testCases, String framework, ExportConfig config) {
         validateExportConfig(config);
 
@@ -108,6 +182,24 @@ public class TestExportService {
         System.err.println("Error processing " + testFile.getName() + ": " + e.getMessage());
         if (verbose) {
             e.printStackTrace();
+        }
+    }
+
+    private static class ProcessFileResult {
+        private final List<TestCase> testCases;
+        private final String framework;
+
+        public ProcessFileResult(List<TestCase> testCases, String framework) {
+            this.testCases = testCases;
+            this.framework = framework;
+        }
+
+        public List<TestCase> getTestCases() {
+            return testCases;
+        }
+
+        public String getFramework() {
+            return framework;
         }
     }
 
