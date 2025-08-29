@@ -35,10 +35,8 @@ public class TestIdAnnotationManager {
                              + " from file: " + methodInfo.getFilePath());
         }
 
-        // Try multiple matching strategies in order of preference
         Optional<MethodDeclaration> result;
 
-        // Strategy 1: Try exact filename match
         String expectedFileName = extractFileName(methodInfo.getFilePath());
         result = compilationUnits.stream()
                 .filter(cu -> isMatchingFile(cu, expectedFileName, verbose))
@@ -52,7 +50,6 @@ public class TestIdAnnotationManager {
             return result;
         }
 
-        // Strategy 2: Try path-based matching with normalized paths
         result = compilationUnits.stream()
                 .filter(cu -> isMatchingFileByPath(cu, methodInfo.getFilePath(), verbose))
                 .flatMap(cu -> findMethodsInCompilationUnit(cu, methodInfo, verbose).stream())
@@ -103,10 +100,6 @@ public class TestIdAnnotationManager {
         }
     }
 
-    private boolean isMatchingFile(CompilationUnit compilationUnit, String expectedFileName) {
-        return isMatchingFile(compilationUnit, expectedFileName, false);
-    }
-
     private boolean isMatchingFile(CompilationUnit compilationUnit, String expectedFileName,
                                     boolean verbose) {
         boolean matches = compilationUnit.getStorage()
@@ -134,7 +127,6 @@ public class TestIdAnnotationManager {
                     Path actualPath = storage.getPath().normalize();
                     Path expectedNormalizedPath = Paths.get(expectedPath).normalize();
                     
-                    // Try exact match first
                     boolean exactMatch = actualPath.equals(expectedNormalizedPath);
                     if (exactMatch) {
                         if (verbose) {
@@ -143,7 +135,6 @@ public class TestIdAnnotationManager {
                         return true;
                     }
                     
-                    // Try ending match (handles different root paths)
                     String actualPathStr = actualPath.toString().replace('\\', '/');
                     String expectedPathStr = expectedNormalizedPath.toString().replace('\\', '/');
                     
@@ -158,11 +149,6 @@ public class TestIdAnnotationManager {
                     return endsWithMatch;
                 })
                 .orElse(false);
-    }
-
-    private List<MethodDeclaration> findMethodsInCompilationUnit(CompilationUnit compilationUnit,
-                                                                 TestMethodInfo methodInfo) {
-        return findMethodsInCompilationUnit(compilationUnit, methodInfo, false);
     }
 
     private List<MethodDeclaration> findMethodsInCompilationUnit(
@@ -181,10 +167,6 @@ public class TestIdAnnotationManager {
         }
         
         return matchingMethods;
-    }
-
-    private boolean isMethodInCorrectClass(MethodDeclaration method, String expectedClassName) {
-        return isMethodInCorrectClass(method, expectedClassName, false);
     }
 
     private boolean isMethodInCorrectClass(MethodDeclaration method, String expectedClassName,

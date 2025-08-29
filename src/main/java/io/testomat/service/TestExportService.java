@@ -3,6 +3,8 @@ package io.testomat.service;
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.TestomatHttpClient;
 import io.testomat.model.TestCase;
+import io.testomat.progressbar.LoadingSpinner;
+import io.testomat.progressbar.ProgressBar;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,11 +29,13 @@ public class TestExportService {
         this.logger = logger;
     }
 
-    public ExportResult processTestFiles(List<File> testFiles, ExportConfig config) {
+    public ExportResult processTestFilesWithProgress(List<File> testFiles,
+                                                     ExportConfig config,
+                                                     ProgressBar progressBar) {
         List<TestCase> allTestCases = new ArrayList<>();
         String primaryFramework = null;
+        int processedFiles = 0;
 
-        // First pass: collect all test cases from all files
         for (File testFile : testFiles) {
             try {
                 ProcessFileResult result = collectTestCasesFromFile(testFile);
@@ -43,7 +47,16 @@ public class TestExportService {
                 }
             } catch (Exception e) {
                 handleFileError(testFile, e, config.isVerbose());
+            } finally {
+                processedFiles++;
+                if (progressBar != null) {
+                    progressBar.update(processedFiles);
+                }
             }
+        }
+
+        if (progressBar != null) {
+            progressBar.finish();
         }
 
         if (allTestCases.isEmpty()) {
@@ -58,44 +71,6 @@ public class TestExportService {
             return new ExportResult(0);
         } else {
             return exportAllTestCases(allTestCases, primaryFramework, config);
-        }
-    }
-
-    private int processTestFile(File testFile, ExportConfig config) {
-        logger.log("Processing: " + testFile.getName());
-
-        CompilationUnit compilationUnit = fileParser.parseFile(testFile.getAbsolutePath());
-        if (compilationUnit == null) {
-            logger.log("  Skipped: Could not parse file");
-            return 0;
-        }
-
-        String framework = detector.detectFramework(compilationUnit);
-        if (framework == null) {
-            logger.log("  Skipped: No test framework detected");
-            return 0;
-        }
-
-        logger.log("  Framework: " + framework);
-
-        List<TestCase> testCases = extractor.extractTestCases(
-                compilationUnit,
-                testFile.getAbsolutePath(),
-                framework
-        );
-
-        if (testCases.isEmpty()) {
-            logger.log("  Skipped: No test methods found");
-            return 0;
-        }
-
-        logger.log("  Found " + testCases.size() + " test methods");
-
-        if (config.isDryRun()) {
-            printTestCases(testCases);
-            return 0;
-        } else {
-            return exportTestCases(testCases, framework, config);
         }
     }
 
@@ -132,15 +107,18 @@ public class TestExportService {
     }
 
     private ExportResult exportAllTestCases(List<TestCase> allTestCases, String framework,
-                                             ExportConfig config) {
+                                            ExportConfig config) {
         validateExportConfig(config);
 
         String requestBody = jsonBuilder.buildRequestBody(allTestCases, framework);
         String requestUrl = config.getServerUrl() + "/api/load?api_key=" + config.getApiKey();
 
+        LoadingSpinner spinner = new LoadingSpinner("Sending test data to server...");
+        spinner.start();
+        
         httpClient.sendPostRequest(requestUrl, requestBody);
-
-        logger.log("✓ Exported " + allTestCases.size() + " test methods in single request");
+        
+        spinner.stopWithMessage("✓ Successfully exported " + allTestCases.size() + " test methods");
         return new ExportResult(allTestCases.size());
     }
 
@@ -153,28 +131,9 @@ public class TestExportService {
         }
     }
 
-    private int exportTestCases(List<TestCase> testCases, String framework, ExportConfig config) {
-        validateExportConfig(config);
-
-        String requestBody = jsonBuilder.buildRequestBody(testCases, framework);
-        String requestUrl = config.getServerUrl() + "/api/load?api_key=" + config.getApiKey();
-
-        httpClient.sendPostRequest(requestUrl, requestBody);
-
-        logger.log("  ✓ Exported " + testCases.size() + " test methods");
-        return testCases.size();
-    }
-
     private void validateExportConfig(ExportConfig config) {
         if (config.getServerUrl() == null || config.getServerUrl().trim().isEmpty()) {
             throw new IllegalArgumentException("TESTOMATIO_URL is required for actual execution");
-        }
-    }
-
-    private void printTestCases(List<TestCase> testCases) {
-        for (TestCase testCase : testCases) {
-            System.out.println("    - " + testCase.getName()
-                    + " [" + String.join(", ", testCase.getLabels()) + "]");
         }
     }
 

@@ -3,6 +3,7 @@ package io.testomat.commands;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.CliClient;
+import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.ResponseParser;
 import io.testomat.service.TestIdAnnotationManager;
 import io.testomat.service.TestIdSyncService;
@@ -60,7 +61,7 @@ public class PullIdsCommand implements Runnable {
                 serverUrl = envUrl;
             }
         }
-        
+
         TestIdSyncService syncService = createSyncService();
         List<CompilationUnit> compilationUnits = loadCompilationUnits();
 
@@ -68,10 +69,9 @@ public class PullIdsCommand implements Runnable {
             System.out.println("Found " + compilationUnits.size() + " compilation units");
         }
 
-        TestIdSyncService.SyncResult result =
-                syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose);
+        ProgressBar progressBar = new ProgressBar(100, "Adding test IDs");
+        syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose, progressBar);
 
-        System.out.println("Processed " + result.getProcessedCount() + " test methods");
         System.out.println("Saved modified files");
     }
 

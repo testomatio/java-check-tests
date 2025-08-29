@@ -3,6 +3,8 @@ package io.testomat.service;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import io.testomat.client.TestomatHttpClient;
+import io.testomat.progressbar.LoadingSpinner;
+import io.testomat.progressbar.ProgressBar;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,31 +35,44 @@ public class TestIdSyncService {
 
     public SyncResult syncTestIds(String apiKey, String serverUrl,
                                   List<CompilationUnit> compilationUnits, boolean verbose) {
+        return syncTestIds(apiKey, serverUrl, compilationUnits, verbose, null);
+    }
+
+    public SyncResult syncTestIds(String apiKey, String serverUrl,
+                                  List<CompilationUnit> compilationUnits, boolean verbose,
+                                  ProgressBar progressBar) {
+        LoadingSpinner spinner = new LoadingSpinner("Fetching test data from server...");
+        spinner.start();
+
         String response = httpClient.sendGetRequest(apiKey, serverUrl);
         Map<String, String> testsMap = responseParser.parseTestsFromResponse(response);
+
+        spinner.stopWithMessage("✓ Received test data from server");
 
         System.out.println("Received " + testsMap.size() + " test entries from API");
         if (verbose) {
             System.out.println("Processing each test entry for annotation...");
         }
 
-        int processedCount = processTestMethods(compilationUnits, testsMap, verbose);
+        if (progressBar != null && testsMap.size() != progressBar.getTotal()) {
+            progressBar = new ProgressBar(testsMap.size(), "Adding test IDs");
+        }
+
+        int processedCount = processTestMethods(compilationUnits, testsMap, verbose, progressBar);
         saveModifiedFiles(compilationUnits);
 
         return new SyncResult(processedCount);
     }
 
     private int processTestMethods(List<CompilationUnit> compilationUnits,
-                                   Map<String, String> testsMap) {
-        return processTestMethods(compilationUnits, testsMap, false);
-    }
-
-    private int processTestMethods(List<CompilationUnit> compilationUnits,
-                                   Map<String, String> testsMap, boolean verbose) {
+                                   Map<String, String> testsMap, boolean verbose,
+                                   ProgressBar progressBar) {
         int processedCount = 0;
         int skippedCount = 0;
+        int currentEntry = 0;
 
         for (Map.Entry<String, String> testEntry : testsMap.entrySet()) {
+            currentEntry++;
             String testKey = testEntry.getKey();
             String testId = testEntry.getValue();
 
@@ -101,6 +116,14 @@ public class TestIdSyncService {
                     System.out.println("  Skipped: Method not found in compilation units");
                 }
             }
+
+            if (progressBar != null) {
+                progressBar.update(currentEntry);
+            }
+        }
+
+        if (progressBar != null) {
+            progressBar.finish();
         }
 
         System.out.println("Processed " + processedCount + " test methods");

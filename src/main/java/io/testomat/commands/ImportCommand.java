@@ -4,6 +4,7 @@ import io.testomat.client.CliClient;
 import io.testomat.service.DirectoryValidator;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.JsonBuilder;
+import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.TestExportService;
 import io.testomat.service.TestFileScanner;
 import io.testomat.service.TestFrameworkDetector;
@@ -83,7 +84,7 @@ public class ImportCommand implements Callable<Integer> {
                     serverUrl = envUrl;
                 }
             }
-            
+
             VerboseLogger logger = new VerboseLogger(verbose);
 
             boolean noDryRunFlag = !dryRun;
@@ -111,8 +112,11 @@ public class ImportCommand implements Callable<Integer> {
                     apiKey, serverUrl, dryRun, verbose);
 
             TestExportService exportService = createExportService(logger);
+
+            // Show progress bar for file processing
+            ProgressBar progressBar = new ProgressBar(testFiles.size(), "Parsing files");
             TestExportService.ExportResult result =
-                    exportService.processTestFiles(testFiles, config);
+                    exportService.processTestFilesWithProgress(testFiles, config, progressBar);
 
             printCompletionMessage(result.getTotalExported());
 
