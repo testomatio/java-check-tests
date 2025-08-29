@@ -35,12 +35,16 @@ public class TestExportService {
         List<TestCase> allTestCases = new ArrayList<>();
         String primaryFramework = null;
         int processedFiles = 0;
+        int filesWithTests = 0;
+
+        System.out.println("Processing " + testFiles.size() + " test files");
 
         for (File testFile : testFiles) {
             try {
                 ProcessFileResult result = collectTestCasesFromFile(testFile);
                 if (result != null && !result.getTestCases().isEmpty()) {
                     allTestCases.addAll(result.getTestCases());
+                    filesWithTests++;
                     if (primaryFramework == null) {
                         primaryFramework = result.getFramework();
                     }
@@ -61,16 +65,19 @@ public class TestExportService {
 
         if (allTestCases.isEmpty()) {
             logger.log("No test methods found across all files");
-            return new ExportResult(0);
+            return new ExportResult(0, filesWithTests);
         }
 
-        logger.log("Found " + allTestCases.size() + " total test methods across all files");
+        logger.log("Found " + allTestCases.size()
+                + " total test methods across "
+                + filesWithTests + " files");
 
         if (config.isDryRun()) {
             printAllTestCases(allTestCases);
-            return new ExportResult(0);
+            return new ExportResult(0, filesWithTests);
         } else {
-            return exportAllTestCases(allTestCases, primaryFramework, config);
+            ExportResult result = exportAllTestCases(allTestCases, primaryFramework, config);
+            return new ExportResult(result.getTotalExported(), filesWithTests);
         }
     }
 
@@ -115,10 +122,12 @@ public class TestExportService {
 
         LoadingSpinner spinner = new LoadingSpinner("Sending test data to server...");
         spinner.start();
-        
+
         httpClient.sendPostRequest(requestUrl, requestBody);
-        
-        spinner.stopWithMessage("✓ Successfully exported " + allTestCases.size() + " test methods");
+
+        spinner.stopWithMessage("Successfully exported "
+                + allTestCases.size()
+                + " test methods");
         return new ExportResult(allTestCases.size());
     }
 
@@ -164,13 +173,23 @@ public class TestExportService {
 
     public static class ExportResult {
         private final int totalExported;
+        private final int filesWithTests;
 
         public ExportResult(int totalExported) {
+            this(totalExported, 0);
+        }
+
+        public ExportResult(int totalExported, int filesWithTests) {
             this.totalExported = totalExported;
+            this.filesWithTests = filesWithTests;
         }
 
         public int getTotalExported() {
             return totalExported;
+        }
+
+        public int getFilesWithTests() {
+            return filesWithTests;
         }
     }
 

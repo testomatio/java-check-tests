@@ -47,7 +47,7 @@ public class TestIdSyncService {
         String response = httpClient.sendGetRequest(apiKey, serverUrl);
         Map<String, String> testsMap = responseParser.parseTestsFromResponse(response);
 
-        spinner.stopWithMessage("✓ Received test data from server");
+        spinner.stopWithMessage("Received test data from server");
 
         System.out.println("Received " + testsMap.size() + " test entries from API");
         if (verbose) {
@@ -55,13 +55,13 @@ public class TestIdSyncService {
         }
 
         if (progressBar != null && testsMap.size() != progressBar.getTotal()) {
-            progressBar = new ProgressBar(testsMap.size(), "Adding test IDs");
+            progressBar = new ProgressBar(testsMap.size(), "Processing test IDs");
         }
 
         int processedCount = processTestMethods(compilationUnits, testsMap, verbose, progressBar);
-        saveModifiedFiles(compilationUnits);
+        int modifiedFilesCount = saveModifiedFiles(compilationUnits);
 
-        return new SyncResult(processedCount);
+        return new SyncResult(processedCount, modifiedFilesCount);
     }
 
     private int processTestMethods(List<CompilationUnit> compilationUnits,
@@ -126,7 +126,6 @@ public class TestIdSyncService {
             progressBar.finish();
         }
 
-        System.out.println("Processed " + processedCount + " test methods");
         if (skippedCount > 0) {
             System.out.println("Skipped " + skippedCount + " test methods (not found or invalid)");
         }
@@ -161,21 +160,36 @@ public class TestIdSyncService {
         return new TestIdAnnotationManager.TestMethodInfo(filePath, className, methodName);
     }
 
-    private void saveModifiedFiles(List<CompilationUnit> compilationUnits) {
-        compilationUnits.forEach(cu ->
-                cu.getStorage().ifPresent(CompilationUnit.Storage::save)
-        );
+    private int saveModifiedFiles(List<CompilationUnit> compilationUnits) {
+        int modifiedCount = 0;
+        for (CompilationUnit cu : compilationUnits) {
+            if (cu.getStorage().isPresent()) {
+                cu.getStorage().get().save();
+                modifiedCount++;
+            }
+        }
+        return modifiedCount;
     }
 
     public static class SyncResult {
         private final int processedCount;
+        private final int modifiedFilesCount;
 
         public SyncResult(int processedCount) {
+            this(processedCount, 0);
+        }
+
+        public SyncResult(int processedCount, int modifiedFilesCount) {
             this.processedCount = processedCount;
+            this.modifiedFilesCount = modifiedFilesCount;
         }
 
         public int getProcessedCount() {
             return processedCount;
+        }
+
+        public int getModifiedFilesCount() {
+            return modifiedFilesCount;
         }
     }
 }

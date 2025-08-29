@@ -69,10 +69,12 @@ public class PullIdsCommand implements Runnable {
             System.out.println("Found " + compilationUnits.size() + " compilation units");
         }
 
-        ProgressBar progressBar = new ProgressBar(100, "Adding test IDs");
-        syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose, progressBar);
+        ProgressBar progressBar = new ProgressBar(100, "Processing test IDs");
+        TestIdSyncService.SyncResult result = 
+                syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose, progressBar);
 
-        System.out.println("Saved modified files");
+        System.out.println("Processed " + result.getProcessedCount() + " test methods");
+        System.out.println("Saved " + result.getModifiedFilesCount() + " modified files");
     }
 
     private TestIdSyncService createSyncService() {

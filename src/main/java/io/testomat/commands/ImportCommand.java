@@ -1,10 +1,10 @@
 package io.testomat.commands;
 
 import io.testomat.client.CliClient;
+import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.DirectoryValidator;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.JsonBuilder;
-import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.TestExportService;
 import io.testomat.service.TestFileScanner;
 import io.testomat.service.TestFrameworkDetector;
@@ -118,7 +118,7 @@ public class ImportCommand implements Callable<Integer> {
             TestExportService.ExportResult result =
                     exportService.processTestFilesWithProgress(testFiles, config, progressBar);
 
-            printCompletionMessage(result.getTotalExported());
+            printCompletionMessage(result);
 
             return SUCCESS_EXIT_CODE;
 
@@ -142,14 +142,16 @@ public class ImportCommand implements Callable<Integer> {
         );
     }
 
-    private void printCompletionMessage(int totalExported) {
+    private void printCompletionMessage(TestExportService.ExportResult result) {
         if (dryRun) {
             System.out.println("\nDry run completed. No data was sent to server.");
+            System.out.println("Found " + result.getTotalExported() + " test methods in "
+                    + result.getFilesWithTests() + " files");
             if (apiKey == null || apiKey.trim().isEmpty()) {
                 System.out.println("Run the same command with apikey and url provided to execute.");
             }
         } else {
-            System.out.println("\n✓ Export completed! Total methods exported: " + totalExported);
+            System.out.println("\n");
         }
     }
 
