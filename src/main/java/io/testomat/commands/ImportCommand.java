@@ -1,6 +1,7 @@
 package io.testomat.commands;
 
 import io.testomat.client.CliClient;
+import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.DirectoryValidator;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.JsonBuilder;
@@ -25,6 +26,7 @@ import picocli.CommandLine.Option;
 public class ImportCommand implements Callable<Integer> {
 
     private static final String CURRENT_DIRECTORY = ".";
+    private static final String DEFAULT_URL = "https://app.testomat.io";
     private static final int SUCCESS_EXIT_CODE = 0;
     private static final int ERROR_EXIT_CODE = 1;
 
@@ -47,8 +49,7 @@ public class ImportCommand implements Callable<Integer> {
 
     @Option(
             names = "--url",
-            description = "Testomat server URL",
-            defaultValue = "${env:TESTOMATIO_URL}")
+            description = "Testomat server URL")
     private String serverUrl;
 
     @Option(
@@ -74,6 +75,16 @@ public class ImportCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         try {
+            // Set default URL if not provided and environment variable is not set
+            if (serverUrl == null || serverUrl.trim().isEmpty()) {
+                String envUrl = System.getenv("TESTOMATIO_URL");
+                if (envUrl == null || envUrl.trim().isEmpty()) {
+                    serverUrl = DEFAULT_URL;
+                } else {
+                    serverUrl = envUrl;
+                }
+            }
+
             VerboseLogger logger = new VerboseLogger(verbose);
 
             boolean noDryRunFlag = !dryRun;
@@ -101,10 +112,13 @@ public class ImportCommand implements Callable<Integer> {
                     apiKey, serverUrl, dryRun, verbose);
 
             TestExportService exportService = createExportService(logger);
-            TestExportService.ExportResult result =
-                    exportService.processTestFiles(testFiles, config);
 
-            printCompletionMessage(result.getTotalExported());
+            // Show progress bar for file processing
+            ProgressBar progressBar = new ProgressBar(testFiles.size(), "Parsing files");
+            TestExportService.ExportResult result =
+                    exportService.processTestFilesWithProgress(testFiles, config, progressBar);
+
+            printCompletionMessage(result);
 
             return SUCCESS_EXIT_CODE;
 
@@ -128,14 +142,16 @@ public class ImportCommand implements Callable<Integer> {
         );
     }
 
-    private void printCompletionMessage(int totalExported) {
+    private void printCompletionMessage(TestExportService.ExportResult result) {
         if (dryRun) {
             System.out.println("\nDry run completed. No data was sent to server.");
+            System.out.println("Found " + result.getTotalExported() + " test methods in "
+                    + result.getFilesWithTests() + " files");
             if (apiKey == null || apiKey.trim().isEmpty()) {
                 System.out.println("Run the same command with apikey and url provided to execute.");
             }
         } else {
-            System.out.println("\n✓ Export completed! Total methods exported: " + totalExported);
+            System.out.println("\n");
         }
     }
 

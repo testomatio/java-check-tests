@@ -3,6 +3,7 @@ package io.testomat.commands;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.client.CliClient;
+import io.testomat.progressbar.ProgressBar;
 import io.testomat.service.ResponseParser;
 import io.testomat.service.TestIdAnnotationManager;
 import io.testomat.service.TestIdSyncService;
@@ -17,6 +18,7 @@ import picocli.CommandLine;
 @CommandLine.Command(name = "pull-ids", description =
         "Pulls IDs into your codebase from testomat.io")
 public class PullIdsCommand implements Runnable {
+    private static final String DEFAULT_URL = "https://app.testomat.io";
     private final JavaParser javaParser;
 
     @CommandLine.Option(
@@ -27,14 +29,12 @@ public class PullIdsCommand implements Runnable {
     @CommandLine.Option(
             names = {"--apikey", "-key"},
             description = "Testomat project api key",
-            defaultValue = "${env:TESTOMATIO}",
-            required = true)
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
     @CommandLine.Option(
             names = "--url",
-            description = "Testomat server URL",
-            defaultValue = "${env:TESTOMATIO_URL}")
+            description = "Testomat server URL")
     private String serverUrl;
 
     @CommandLine.Option(
@@ -52,6 +52,16 @@ public class PullIdsCommand implements Runnable {
 
     @Override
     public void run() {
+        // Set default URL if not provided and environment variable is not set
+        if (serverUrl == null || serverUrl.trim().isEmpty()) {
+            String envUrl = System.getenv("TESTOMATIO_URL");
+            if (envUrl == null || envUrl.trim().isEmpty()) {
+                serverUrl = DEFAULT_URL;
+            } else {
+                serverUrl = envUrl;
+            }
+        }
+
         TestIdSyncService syncService = createSyncService();
         List<CompilationUnit> compilationUnits = loadCompilationUnits();
 
@@ -59,11 +69,12 @@ public class PullIdsCommand implements Runnable {
             System.out.println("Found " + compilationUnits.size() + " compilation units");
         }
 
-        TestIdSyncService.SyncResult result =
-                syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose);
+        ProgressBar progressBar = new ProgressBar(100, "Processing test IDs");
+        TestIdSyncService.SyncResult result = 
+                syncService.syncTestIds(apiKey, serverUrl, compilationUnits, verbose, progressBar);
 
         System.out.println("Processed " + result.getProcessedCount() + " test methods");
-        System.out.println("Saved modified files");
+        System.out.println("Saved " + result.getModifiedFilesCount() + " modified files");
     }
 
     private TestIdSyncService createSyncService() {
