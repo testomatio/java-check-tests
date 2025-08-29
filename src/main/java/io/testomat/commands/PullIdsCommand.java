@@ -17,6 +17,7 @@ import picocli.CommandLine;
 @CommandLine.Command(name = "pull-ids", description =
         "Pulls IDs into your codebase from testomat.io")
 public class PullIdsCommand implements Runnable {
+    private static final String DEFAULT_URL = "https://app.testomat.io";
     private final JavaParser javaParser;
 
     @CommandLine.Option(
@@ -27,14 +28,12 @@ public class PullIdsCommand implements Runnable {
     @CommandLine.Option(
             names = {"--apikey", "-key"},
             description = "Testomat project api key",
-            defaultValue = "${env:TESTOMATIO}",
-            required = true)
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
     @CommandLine.Option(
             names = "--url",
-            description = "Testomat server URL",
-            defaultValue = "${env:TESTOMATIO_URL}")
+            description = "Testomat server URL")
     private String serverUrl;
 
     @CommandLine.Option(
@@ -52,6 +51,16 @@ public class PullIdsCommand implements Runnable {
 
     @Override
     public void run() {
+        // Set default URL if not provided and environment variable is not set
+        if (serverUrl == null || serverUrl.trim().isEmpty()) {
+            String envUrl = System.getenv("TESTOMATIO_URL");
+            if (envUrl == null || envUrl.trim().isEmpty()) {
+                serverUrl = DEFAULT_URL;
+            } else {
+                serverUrl = envUrl;
+            }
+        }
+        
         TestIdSyncService syncService = createSyncService();
         List<CompilationUnit> compilationUnits = loadCompilationUnits();
 

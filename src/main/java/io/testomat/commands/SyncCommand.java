@@ -8,20 +8,18 @@ import picocli.CommandLine;
         description = "Run export then importId",
         mixinStandardHelpOptions = true)
 public class SyncCommand implements Runnable {
+    private static final String DEFAULT_URL = "https://app.testomat.io";
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
 
             description = "API key for Testomat.io",
-            defaultValue = "${env:TESTOMATIO}",
-            required = true)
+            defaultValue = "${env:TESTOMATIO}")
     private String apiKey;
 
     @CommandLine.Option(
             names = {"--url"},
-            required = true,
-            description = "Server URL",
-            defaultValue = "${env:TESTOMATIO_URL}"
+            description = "Server URL"
     )
     private String url;
 
@@ -42,6 +40,16 @@ public class SyncCommand implements Runnable {
 
     @Override
     public void run() {
+        // Set default URL if not provided and environment variable is not set
+        if (url == null || url.trim().isEmpty()) {
+            String envUrl = System.getenv("TESTOMATIO_URL");
+            if (envUrl == null || envUrl.trim().isEmpty()) {
+                url = DEFAULT_URL;
+            } else {
+                url = envUrl;
+            }
+        }
+        
         CommandLine parent = spec.parent().commandLine();
         
         String[] importArgs = verbose 
