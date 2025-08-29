@@ -32,7 +32,7 @@ Use this command before running tests to see the code and have proper package st
 Will dry run if apikey is not provided.
 
 >**Options:**
->- `--apikey` / `-key` - Your Testomat.io project API key (required if you haven't provided it during this terminal session as TESTOMATIO )
+>- `--apikey` / `-key` - Your Testomat.io project API key (required if you haven't provided it during this terminal session as TESTOMATIO)
 >- `--url` - Server URL, e.g. https://app.testomat.io (required  if you haven't provided it during this terminal session as TESTOMATIO_URL or want to use default https://app.testomat.io)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 >- `--verbose` / `-v` - Enable verbose output (optional)
@@ -125,10 +125,12 @@ Removes `@TestId` annotations and related imports from all classes in the direct
 
 ```bash
     # Imports your tests code to the Testomat.io
-    java -jar testomatio.jar import --apikey tstmt_your_key --url https://app.testomat.io
+    # --apikey is required if you haven't provided it during this terminal session as TESTOMATIO
+    java -jar testomatio.jar import --apikey tstmt_your_key
     
-    # Updates IDs from of the test (imports them to the Testomat.io and then updates IDs in toyr codebase) 
-    java -jar testomatio.jar sync --apikey tstmt_your_key --url https://app.testomat.io
+    # Updates IDs from of the test (imports them to the Testomat.io and then updates IDs in your codebase) 
+    # --apikey is required if you haven't provided it during this terminal session as TESTOMATIO
+    java -jar testomatio.jar sync --apikey tstmt_your_key
     
     # Clean up test IDs (locally)
     java -jar testomatio.jar clean-ids --directory ./src/test/java
