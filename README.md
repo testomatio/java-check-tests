@@ -32,8 +32,8 @@ Use this command before running tests to see the code and have proper package st
 Will dry run if apikey is not provided.
 
 >**Options:**
->- `--apikey` / `-key` - Your Testomat.io project API key (required)
->- `--url` - Server URL, e.g. https://app.testomat.io (required)
+>- `--apikey` / `-key` - Your Testomat.io project API key (required if you haven't provided it during this terminal session as TESTOMATIO )
+>- `--url` - Server URL, e.g. https://app.testomat.io (required  if you haven't provided it during this terminal session as TESTOMATIO_URL or want to use default https://app.testomat.io)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be exported without sending (optional)
@@ -48,8 +48,8 @@ Convenience command for typical workflow.
 >**Alias** `update-ids`
 
 >**Options:**
->- `--apikey` / `-key` - Your Testomat.io project API key (required)
->- `--url` - Server URL (required)
+>- `--apikey` / `-key` - Your Testomat.io project API key (required if you haven't provided it during this terminal session as TESTOMATIO)
+>- `--url` - Server URL (required  if you haven't provided it during this terminal session as TESTOMATIO_URL or want to use default https://app.testomat.io)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 
 **Please note:** if not all the tests have been annotated with @TestId after the sync command -  
