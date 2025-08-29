@@ -40,7 +40,13 @@ public class SyncCommand implements Runnable {
 
     @Override
     public void run() {
-        // Set default URL if not provided and environment variable is not set
+        defineUrl();
+        CommandLine parent = spec.parent().commandLine();
+        handeCommandExecution(parent, getImportArgsForCommand("import"));
+        handeCommandExecution(parent, getImportArgsForCommand("pull-ids"));
+    }
+
+    private void defineUrl() {
         if (url == null || url.trim().isEmpty()) {
             String envUrl = System.getenv("TESTOMATIO_URL");
             if (envUrl == null || envUrl.trim().isEmpty()) {
@@ -49,32 +55,27 @@ public class SyncCommand implements Runnable {
                 url = envUrl;
             }
         }
-        
-        CommandLine parent = spec.parent().commandLine();
-        
-        String[] importArgs = verbose 
-            ? new String[]{"import", "--apikey=" + apiKey, "--url=" + url, 
-                    "--directory=" + directory, "-v"}
-            : new String[]{"import", "--apikey=" + apiKey, "--url=" + url, 
+    }
+
+    private String[] getImportArgsForCommand(String command) {
+        return verbose
+                ? new String[]{command,
+                    "--apikey=" + apiKey,
+                    "--url=" + url,
+                    "--directory=" + directory,
+                    "-v"}
+                : new String[]{command,
+                    "--apikey=" + apiKey,
+                    "--url=" + url,
                     "--directory=" + directory};
-            
-        int code1 = parent.execute(importArgs);
+    }
+
+    private void handeCommandExecution(CommandLine parent, String[] args) {
+        System.out.println("Running " + args[0] + " command...");
+        int code1 = parent.execute(args);
         if (code1 != 0) {
             spec.commandLine().getErr().println("import failed with code " + code1);
             System.exit(code1);
-        }
-        
-        String[] pullIdsArgs = verbose 
-            ? new String[]{"pull-ids", "--apikey=" + apiKey, "--url=" + url, 
-                    "--directory=" + directory, "-v"}
-            : new String[]{"pull-ids", "--apikey=" + apiKey, "--url=" + url, 
-                    "--directory=" + directory};
-            
-        System.out.println("Running pull-ids (1st time)...");
-        int code2 = parent.execute(pullIdsArgs);
-        if (code2 != 0) {
-            spec.commandLine().getErr().println("pull-ids (1st run) failed with code " + code2);
-            System.exit(code2);
         }
     }
 }
