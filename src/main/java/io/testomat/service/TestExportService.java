@@ -1,60 +1,132 @@
 package io.testomat.service;
 
 import com.github.javaparser.ast.CompilationUnit;
+import io.testomat.client.CliClient;
 import io.testomat.client.TestomatHttpClient;
+import io.testomat.exception.CliException;
 import io.testomat.model.TestCase;
 import io.testomat.progressbar.LoadingSpinner;
 import io.testomat.progressbar.ProgressBar;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TestExportService {
+    private static final Logger log = LoggerFactory.getLogger(TestExportService.class);
 
     private final JavaFileParser fileParser;
     private final TestMethodExtractor extractor;
     private final TestFrameworkDetector detector;
     private final JsonBuilder jsonBuilder;
     private final TestomatHttpClient httpClient;
-    private final VerboseLogger logger;
+    private final LoadingSpinner spinner;
+
+    public TestExportService() {
+        this.fileParser = new JavaFileParser();
+        this.extractor = new TestMethodExtractor();
+        this.detector = new TestFrameworkDetector();
+        this.jsonBuilder = new JsonBuilder();
+        this.httpClient = new CliClient();
+        this.spinner = new LoadingSpinner("Sending test data to server...");
+    }
 
     public TestExportService(JavaFileParser fileParser, TestMethodExtractor extractor,
                              TestFrameworkDetector detector, JsonBuilder jsonBuilder,
-                             TestomatHttpClient httpClient, VerboseLogger logger) {
+                             TestomatHttpClient httpClient, LoadingSpinner spinner) {
         this.fileParser = fileParser;
         this.extractor = extractor;
         this.detector = detector;
         this.jsonBuilder = jsonBuilder;
         this.httpClient = httpClient;
-        this.logger = logger;
+        this.spinner = spinner;
     }
 
-    public ExportResult processTestFilesWithProgress(List<File> testFiles,
-                                                     ExportConfig config,
-                                                     ProgressBar progressBar) {
+    public int processTestFilesWithProgress(List<File> testFiles, String apiKey,
+                                            String serverUrl, boolean dryRun,
+                                            boolean verbose, ProgressBar progressBar) {
+        ProcessingResult result = processAllFiles(testFiles, verbose, progressBar);
+
+        return handleProcessingResult(result.allTestCases, result.primaryFramework,
+                apiKey, serverUrl, dryRun);
+    }
+
+    private List<TestCase> collectTestCasesFromFile(File file) {
+        CompilationUnit compilationUnit = fileParser.parseFile(file.getAbsolutePath());
+        if (compilationUnit == null) {
+            return new ArrayList<>();
+        }
+
+        String framework = detector.detectFramework(compilationUnit);
+        if (framework == null) {
+            return new ArrayList<>();
+        }
+
+        List<TestCase> testCases = extractor.extractTestCases(
+                compilationUnit, file.getAbsolutePath(), framework);
+
+        return testCases.isEmpty() ? new ArrayList<>() : testCases;
+    }
+
+    private int exportAllTestCases(List<TestCase> allTestCases, String framework,
+                                   String apiKey, String serverUrl) {
+        validateExportConfig(serverUrl);
+
+        String requestBody = jsonBuilder.buildRequestBody(allTestCases, framework);
+        String requestUrl = serverUrl + "/api/load?api_key=" + apiKey;
+
+        spinner.start();
+
+        try {
+            httpClient.sendPostRequest(requestUrl, requestBody);
+        } catch (Exception e) {
+            throw new CliException("Error while executing request", e);
+        }
+
+        spinner.stopWithMessage("Successfully exported " + allTestCases.size()
+                + " test methods");
+
+        return allTestCases.size();
+    }
+
+    private void printAllTestCases(List<TestCase> testCases) {
+        log.info("All test methods found:");
+        for (TestCase testCase : testCases) {
+            log.info("  - {} [{}] ({})", testCase.getName(),
+                    String.join(", ", testCase.getLabels()), testCase.getFile());
+        }
+    }
+
+    private void validateExportConfig(String serverUrl) {
+        if (serverUrl == null || serverUrl.trim().isEmpty()) {
+            throw new IllegalArgumentException("TESTOMATIO_URL is required for actual execution");
+        }
+    }
+
+    private ProcessingResult processAllFiles(List<File> testFiles, boolean verbose,
+                                             ProgressBar progressBar) {
         List<TestCase> allTestCases = new ArrayList<>();
         String primaryFramework = null;
-        int processedFiles = 0;
-        int filesWithTests = 0;
-
-        System.out.println("Processing " + testFiles.size() + " test files");
+        int processedFilesCount = 0;
 
         for (File testFile : testFiles) {
             try {
-                ProcessFileResult result = collectTestCasesFromFile(testFile);
-                if (result != null && !result.getTestCases().isEmpty()) {
-                    allTestCases.addAll(result.getTestCases());
-                    filesWithTests++;
+                List<TestCase> testCases = collectTestCasesFromFile(testFile);
+                if (!testCases.isEmpty()) {
+                    allTestCases.addAll(testCases);
                     if (primaryFramework == null) {
-                        primaryFramework = result.getFramework();
+                        primaryFramework = detectFrameworkFromFile(testFile);
                     }
                 }
             } catch (Exception e) {
-                handleFileError(testFile, e, config.isVerbose());
+                if (verbose) {
+                    throw new CliException("Error processing file " + testFile.getName(), e);
+                }
             } finally {
-                processedFiles++;
+                processedFilesCount++;
                 if (progressBar != null) {
-                    progressBar.update(processedFiles);
+                    progressBar.update(processedFilesCount);
                 }
             }
         }
@@ -63,163 +135,41 @@ public class TestExportService {
             progressBar.finish();
         }
 
+        return new ProcessingResult(allTestCases, primaryFramework);
+    }
+
+    private int handleProcessingResult(List<TestCase> allTestCases, String primaryFramework,
+                                       String apiKey, String serverUrl, boolean dryRun) {
         if (allTestCases.isEmpty()) {
-            logger.log("No test methods found across all files");
-            return new ExportResult(0, filesWithTests);
+            log.info("No test methods found across all files");
+            return 0;
         }
 
-        logger.log("Found " + allTestCases.size()
-                + " total test methods across "
-                + filesWithTests + " files");
+        log.info("Found {} total test methods", allTestCases.size());
 
-        if (config.isDryRun()) {
+        if (dryRun) {
             printAllTestCases(allTestCases);
-            return new ExportResult(0, filesWithTests);
+            return allTestCases.size();
         } else {
-            ExportResult result = exportAllTestCases(allTestCases, primaryFramework, config);
-            return new ExportResult(result.getTotalExported(), filesWithTests);
+            return exportAllTestCases(allTestCases, primaryFramework, apiKey, serverUrl);
         }
     }
 
-    private ProcessFileResult collectTestCasesFromFile(File testFile) {
-        logger.log("Processing: " + testFile.getName());
-
-        CompilationUnit compilationUnit = fileParser.parseFile(testFile.getAbsolutePath());
+    private String detectFrameworkFromFile(File file) {
+        CompilationUnit compilationUnit = fileParser.parseFile(file.getAbsolutePath());
         if (compilationUnit == null) {
-            logger.log("  Skipped: Could not parse file");
             return null;
         }
-
-        String framework = detector.detectFramework(compilationUnit);
-        if (framework == null) {
-            logger.log("  Skipped: No test framework detected");
-            return null;
-        }
-
-        logger.log("  Framework: " + framework);
-
-        List<TestCase> testCases = extractor.extractTestCases(
-                compilationUnit,
-                testFile.getAbsolutePath(),
-                framework
-        );
-
-        if (testCases.isEmpty()) {
-            logger.log("  Skipped: No test methods found");
-            return null;
-        }
-
-        logger.log("  Found " + testCases.size() + " test methods");
-        return new ProcessFileResult(testCases, framework);
+        return detector.detectFramework(compilationUnit);
     }
 
-    private ExportResult exportAllTestCases(List<TestCase> allTestCases, String framework,
-                                            ExportConfig config) {
-        validateExportConfig(config);
+    private static class ProcessingResult {
+        private final List<TestCase> allTestCases;
+        private final String primaryFramework;
 
-        String requestBody = jsonBuilder.buildRequestBody(allTestCases, framework);
-        String requestUrl = config.getServerUrl() + "/api/load?api_key=" + config.getApiKey();
-
-        LoadingSpinner spinner = new LoadingSpinner("Sending test data to server...");
-        spinner.start();
-
-        httpClient.sendPostRequest(requestUrl, requestBody);
-
-        spinner.stopWithMessage("Successfully exported "
-                + allTestCases.size()
-                + " test methods");
-        return new ExportResult(allTestCases.size());
-    }
-
-    private void printAllTestCases(List<TestCase> testCases) {
-        System.out.println("All test methods found:");
-        for (TestCase testCase : testCases) {
-            System.out.println("  - " + testCase.getName()
-                    + " [" + String.join(", ", testCase.getLabels()) + "] "
-                    + "(" + testCase.getFile() + ")");
-        }
-    }
-
-    private void validateExportConfig(ExportConfig config) {
-        if (config.getServerUrl() == null || config.getServerUrl().trim().isEmpty()) {
-            throw new IllegalArgumentException("TESTOMATIO_URL is required for actual execution");
-        }
-    }
-
-    private void handleFileError(File testFile, Exception e, boolean verbose) {
-        System.err.println("Error processing " + testFile.getName() + ": " + e.getMessage());
-        if (verbose) {
-            e.printStackTrace();
-        }
-    }
-
-    private static class ProcessFileResult {
-        private final List<TestCase> testCases;
-        private final String framework;
-
-        public ProcessFileResult(List<TestCase> testCases, String framework) {
-            this.testCases = testCases;
-            this.framework = framework;
-        }
-
-        public List<TestCase> getTestCases() {
-            return testCases;
-        }
-
-        public String getFramework() {
-            return framework;
-        }
-    }
-
-    public static class ExportResult {
-        private final int totalExported;
-        private final int filesWithTests;
-
-        public ExportResult(int totalExported) {
-            this(totalExported, 0);
-        }
-
-        public ExportResult(int totalExported, int filesWithTests) {
-            this.totalExported = totalExported;
-            this.filesWithTests = filesWithTests;
-        }
-
-        public int getTotalExported() {
-            return totalExported;
-        }
-
-        public int getFilesWithTests() {
-            return filesWithTests;
-        }
-    }
-
-    public static class ExportConfig {
-        private final String apiKey;
-        private final String serverUrl;
-        private final boolean dryRun;
-        private final boolean verbose;
-
-        public ExportConfig(String apiKey, String serverUrl, boolean dryRun, boolean verbose) {
-            this.apiKey = apiKey;
-            this.serverUrl = serverUrl;
-            this.dryRun = dryRun;
-            this.verbose = verbose;
-        }
-
-        public String getApiKey() {
-            return apiKey;
-        }
-
-        public String getServerUrl() {
-            return serverUrl;
-        }
-
-        public boolean isDryRun() {
-            return dryRun;
-        }
-
-        public boolean isVerbose() {
-            return verbose;
+        ProcessingResult(List<TestCase> allTestCases, String primaryFramework) {
+            this.allTestCases = allTestCases;
+            this.primaryFramework = primaryFramework;
         }
     }
 }

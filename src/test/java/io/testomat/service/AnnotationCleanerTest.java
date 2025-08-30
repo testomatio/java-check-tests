@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import io.testomat.model.CleanupResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,7 +100,7 @@ class AnnotationCleanerTest {
         CompilationUnit cu = parseCode(TEST_CLASS_WITH_ANNOTATIONS);
 
         // When
-        AnnotationCleaner.CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, true);
+        CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, true);
 
         // Then
         assertEquals(3, result.getRemovedAnnotations(), "Should count 3 @TestId annotations");
@@ -117,7 +118,7 @@ class AnnotationCleanerTest {
         CompilationUnit cu = parseCode(TEST_CLASS_WITH_ANNOTATIONS);
 
         // When
-        AnnotationCleaner.CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
+        CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
 
         // Then
         assertEquals(3, result.getRemovedAnnotations(), "Should report 3 removed @TestId annotations");
@@ -135,7 +136,7 @@ class AnnotationCleanerTest {
         CompilationUnit cu = parseCode(TEST_CLASS_WITHOUT_ANNOTATIONS);
 
         // When
-        AnnotationCleaner.CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
+        CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
 
         // Then
         assertEquals(0, result.getRemovedAnnotations(), "Should report 0 removed annotations");
@@ -152,7 +153,7 @@ class AnnotationCleanerTest {
         CompilationUnit cu = parseCode(TEST_CLASS_WITHOUT_IMPORT);
 
         // When
-        AnnotationCleaner.CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
+        CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
 
         // Then
         assertEquals(1, result.getRemovedAnnotations(), "Should report 1 removed annotation");
@@ -170,7 +171,7 @@ class AnnotationCleanerTest {
         CompilationUnit cu = parseCode(emptyClass);
 
         // When
-        AnnotationCleaner.CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
+        CleanupResult result = annotationCleaner.cleanTestIdAnnotations(cu, false);
 
         // Then
         assertEquals(0, result.getRemovedAnnotations(), "Should report 0 removed annotations");
@@ -224,7 +225,7 @@ class AnnotationCleanerTest {
     @DisplayName("CleanupResult should have correct getters")
     void cleanupResultShouldHaveCorrectGetters() {
         // Given
-        AnnotationCleaner.CleanupResult result = new AnnotationCleaner.CleanupResult(5, 2);
+        CleanupResult result = new CleanupResult(5, 2);
 
         // Then
         assertEquals(5, result.getRemovedAnnotations());

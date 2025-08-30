@@ -2,13 +2,16 @@ package io.testomat.commands;
 
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.exception.CliException;
+import io.testomat.model.CleanupResult;
+import io.testomat.model.FilesProcessingResult;
 import io.testomat.service.AnnotationCleaner;
 import io.testomat.service.JavaFileParser;
 import io.testomat.service.TestFileScanner;
-import io.testomat.service.VerboseLogger;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -17,6 +20,7 @@ import picocli.CommandLine.Option;
         description = "Remove @TestId annotations and imports from test files"
 )
 public class CleanIdsCommand implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(CleanIdsCommand.class);
 
     private final JavaFileParser parser;
     private final TestFileScanner scanner;
@@ -55,34 +59,33 @@ public class CleanIdsCommand implements Runnable {
     @Override
     public void run() {
         try {
-            VerboseLogger logger = new VerboseLogger(verbose);
-
-            logger.log("Starting @TestId cleanup from directory: "
-                    + Paths.get(directory).toAbsolutePath());
+            log.info("Starting @TestId cleanup from directory: {}",
+                    Paths.get(directory).toAbsolutePath());
 
             List<File> javaFiles = scanner.findTestFiles(new File(directory));
-            logger.log("Found " + javaFiles.size() + " Java files");
+            log.info("Found {} Java files", javaFiles.size());
 
             if (javaFiles.isEmpty()) {
-                System.out.println("No Java files found!");
+                log.info("No Java files found!");
                 return;
             }
 
-            CleanupResult result = processFiles(javaFiles, parser, cleaner, logger);
+            FilesProcessingResult result = processFiles(javaFiles, parser, cleaner);
             printSummary(result);
 
         } catch (Exception e) {
-            handleError("Cleanup failed", e);
+            handleProcessingException(e);
         }
     }
 
-    private CleanupResult processFiles(List<File> javaFiles, JavaFileParser parser,
-                                       AnnotationCleaner cleaner, VerboseLogger logger) {
-        CleanupResult totalResult = new CleanupResult();
+    private FilesProcessingResult processFiles(List<File> javaFiles,
+                                               JavaFileParser parser,
+                                               AnnotationCleaner cleaner) {
+        FilesProcessingResult totalResult = new FilesProcessingResult();
 
         for (File javaFile : javaFiles) {
             try {
-                processFile(javaFile, parser, cleaner, logger, totalResult);
+                processSingleFile(javaFile, parser, cleaner, totalResult);
             } catch (Exception e) {
                 handleFileError(javaFile, e);
             }
@@ -91,29 +94,33 @@ public class CleanIdsCommand implements Runnable {
         return totalResult;
     }
 
-    private void processFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
-                             VerboseLogger logger, CleanupResult totalResult) {
-        logger.log("Processing: " + javaFile.getName());
+    private void processSingleFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
+                                   FilesProcessingResult totalResult) {
+        if (verbose) {
+            log.info("Processing: {}", javaFile.getName());
+        }
 
         CompilationUnit cu = parser.parseFile(javaFile.getAbsolutePath());
         if (cu == null) {
-            logger.log("  Skipped: Could not parse file");
+            log.info("  Skipped: Could not parse file");
             return;
         }
 
-        AnnotationCleaner.CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
+        CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
 
         if (result.getRemovedAnnotations() > 0 || result.getRemovedImports() > 0) {
-            logger.log("  Removed " + result.getRemovedAnnotations() + " @TestId annotations");
-            logger.log("  Removed " + result.getRemovedImports() + " TestId imports");
+            if (verbose) {
+                log.info("  Removed {} @TestId annotations", result.getRemovedAnnotations());
+                log.info("  Removed {} TestId imports", result.getRemovedImports());
+            }
 
             if (!dryRun) {
                 saveFile(cu);
             }
 
-            totalResult.addResults(result.getRemovedAnnotations(), result.getRemovedImports(), 1);
+            totalResult.addResults(result.getRemovedAnnotations(), result.getRemovedImports());
         } else {
-            logger.log("  No @TestId annotations or imports found");
+            log.info("  No @TestId annotations or imports found");
         }
     }
 
@@ -127,18 +134,18 @@ public class CleanIdsCommand implements Runnable {
         });
     }
 
-    private void printSummary(CleanupResult result) {
+    private void printSummary(FilesProcessingResult result) {
         if (dryRun) {
-            System.out.println("\nDry run completed. No files were modified.");
-            System.out.println("Would remove:");
+            log.info("\nDry run completed. No files were modified.");
+            log.info("Would remove:");
         } else {
-            System.out.println("\n✓ Cleanup completed!");
-            System.out.println("Removed:");
+            log.info("\n Cleanup completed!");
+            log.info("Removed:");
         }
 
-        System.out.println("  - @TestId annotations: " + result.getTotalAnnotations());
-        System.out.println("  - TestId imports: " + result.getTotalImports());
-        System.out.println("  - Modified files: " + result.getModifiedFiles());
+        log.info("  - @TestId annotations: {}", result.getTotalAnnotations());
+        log.info("  - TestId imports: {}", result.getTotalImports());
+        log.info("  - Modified files: {}", result.getModifiedFiles());
     }
 
     private void handleFileError(File javaFile, Exception e) {
@@ -148,35 +155,11 @@ public class CleanIdsCommand implements Runnable {
         }
     }
 
-    private void handleError(String message, Exception e) {
-        System.err.println(message + ": " + e.getMessage());
+    private void handleProcessingException(Exception e) {
+        System.err.println("Cleanup failed" + ": " + e.getMessage());
         if (verbose) {
-            throw new CliException("Failed to process file: " + message, e);
+            throw new CliException("Failed to process file: " + "Cleanup failed", e);
         }
-        throw new CliException(message, e);
-    }
-
-    private static class CleanupResult {
-        private int totalAnnotations = 0;
-        private int totalImports = 0;
-        private int modifiedFiles = 0;
-
-        void addResults(int annotations, int imports, int files) {
-            this.totalAnnotations += annotations;
-            this.totalImports += imports;
-            this.modifiedFiles += files;
-        }
-
-        int getTotalAnnotations() {
-            return totalAnnotations;
-        }
-
-        int getTotalImports() {
-            return totalImports;
-        }
-
-        int getModifiedFiles() {
-            return modifiedFiles;
-        }
+        throw new CliException("Cleanup failed", e);
     }
 }
