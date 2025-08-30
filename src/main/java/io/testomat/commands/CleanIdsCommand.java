@@ -2,6 +2,7 @@ package io.testomat.commands;
 
 import com.github.javaparser.ast.CompilationUnit;
 import io.testomat.exception.CliException;
+import io.testomat.model.CleanupResult;
 import io.testomat.model.FilesProcessingResult;
 import io.testomat.service.AnnotationCleaner;
 import io.testomat.service.JavaFileParser;
@@ -103,7 +104,7 @@ public class CleanIdsCommand implements Runnable {
             return;
         }
 
-        AnnotationCleaner.CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
+        CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
 
         if (result.getRemovedAnnotations() > 0 || result.getRemovedImports() > 0) {
             if (verbose) {

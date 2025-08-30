@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import io.testomat.model.CleanupResult;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,7 +49,7 @@ public class AnnotationCleaner {
         List<ImportDeclaration> testIdImports = findTestIdImports(cu);
 
         if (!dryRun) {
-            testIdImports.forEach(ImportDeclaration::remove);
+            findTestIdImports(cu).forEach(ImportDeclaration::remove);
         }
 
         return testIdImports.size();
@@ -59,23 +60,5 @@ public class AnnotationCleaner {
                 .filter(importDecl ->
                         TEST_ID_IMPORT.equals(importDecl.getNameAsString()))
                 .collect(Collectors.toList());
-    }
-
-    public static class CleanupResult {
-        private final int removedAnnotations;
-        private final int removedImports;
-
-        public CleanupResult(int removedAnnotations, int removedImports) {
-            this.removedAnnotations = removedAnnotations;
-            this.removedImports = removedImports;
-        }
-
-        public int getRemovedAnnotations() {
-            return removedAnnotations;
-        }
-
-        public int getRemovedImports() {
-            return removedImports;
-        }
     }
 }
