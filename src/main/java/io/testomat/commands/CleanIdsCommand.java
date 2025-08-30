@@ -58,7 +58,8 @@ public class CleanIdsCommand implements Runnable {
     @Override
     public void run() {
         try {
-            log.info("Starting @TestId cleanup from directory: {}", Paths.get(directory).toAbsolutePath());
+            log.info("Starting @TestId cleanup from directory: {}",
+                    Paths.get(directory).toAbsolutePath());
 
             List<File> javaFiles = scanner.findTestFiles(new File(directory));
             log.info("Found {} Java files", javaFiles.size());
@@ -92,7 +93,8 @@ public class CleanIdsCommand implements Runnable {
         return totalResult;
     }
 
-    private void processSingleFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner, FilesProcessingResult totalResult) {
+    private void processSingleFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
+                                   FilesProcessingResult totalResult) {
         log.info("Processing: {}", javaFile.getName());
 
         CompilationUnit cu = parser.parseFile(javaFile.getAbsolutePath());
@@ -104,8 +106,10 @@ public class CleanIdsCommand implements Runnable {
         AnnotationCleaner.CleanupResult result = cleaner.cleanTestIdAnnotations(cu, dryRun);
 
         if (result.getRemovedAnnotations() > 0 || result.getRemovedImports() > 0) {
-            log.info("  Removed {} @TestId annotations", result.getRemovedAnnotations());
-            log.info("  Removed {} TestId imports", result.getRemovedImports());
+            if (verbose) {
+                log.info("  Removed {} @TestId annotations", result.getRemovedAnnotations());
+                log.info("  Removed {} TestId imports", result.getRemovedImports());
+            }
 
             if (!dryRun) {
                 saveFile(cu);
