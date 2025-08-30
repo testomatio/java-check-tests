@@ -96,7 +96,9 @@ public class CleanIdsCommand implements Runnable {
 
     private void processSingleFile(File javaFile, JavaFileParser parser, AnnotationCleaner cleaner,
                                    FilesProcessingResult totalResult) {
-        log.info("Processing: {}", javaFile.getName());
+        if (verbose) {
+            log.info("Processing: {}", javaFile.getName());
+        }
 
         CompilationUnit cu = parser.parseFile(javaFile.getAbsolutePath());
         if (cu == null) {
