@@ -9,6 +9,7 @@ import picocli.CommandLine;
         mixinStandardHelpOptions = true)
 public class SyncCommand implements Runnable {
     private static final String DEFAULT_URL = "https://app.testomat.io";
+    private static final String VERSION = "v.0.1.8";
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
@@ -40,6 +41,7 @@ public class SyncCommand implements Runnable {
 
     @Override
     public void run() {
+        System.out.println("JAVA-CHECK-TESTS " + VERSION);
         defineUrl();
         CommandLine parent = spec.parent().commandLine();
         handeCommandExecution(parent, getImportArgsForCommand("import"));
