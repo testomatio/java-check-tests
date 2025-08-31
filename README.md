@@ -144,18 +144,18 @@ You can use these oneliners to **download and update ids** in one move
 
 >- UNIX, MACOS:  
 ```bash
-  export TESTOMATIO_URL=... && \
   export TESTOMATIO=... && \
   curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar && \
   java -jar testomatio.jar sync
 ```
 >- WINDOWS cdm:  
 ```cmd
-    set TESTOMATIO_URL=...&& ^
     set TESTOMATIO=...&& ^
     curl -L -O https://github.com/testomatio/java-check-tests/releases/latest/download/testomatio.jar&& ^
     java -jar testomatio.jar sync
 ```
+
+You can add `export TESTOMATIO_URL=... && \` or `set TESTOMATIO_URL=...&& ^` if you want to use different server url than https://testomat.io
 **Where TESTOMATIO_URL is server url and TESTOMATIO is your porject api key.**  
 **Be patient to the whitespaces in the Windows command.**
 
