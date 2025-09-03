@@ -173,7 +173,7 @@ class TestMethodExtractorTest {
         // Verify specific test cases
         TestCase simpleTest = findTestByMethodName(testCases, "simpleTest");
         assertNotNull(simpleTest);
-        assertEquals("Simple test case", simpleTest.getName());
+        assertEquals("simpleTest", simpleTest.getName());
         assertFalse(simpleTest.isSkipped());
         assertTrue(simpleTest.getLabels().contains("unit"));
         
@@ -227,13 +227,13 @@ class TestMethodExtractorTest {
         TestCase outerTest = findTestByMethodName(testCases, "outerTest");
         assertNotNull(outerTest);
         assertEquals(1, outerTest.getSuites().size());
-        assertEquals("Outer Test Class", outerTest.getSuites().get(0));
+        assertEquals("OuterTest", outerTest.getSuites().get(0));
         
         TestCase innerTest = findTestByMethodName(testCases, "innerTest");
         assertNotNull(innerTest);
         assertEquals(2, innerTest.getSuites().size());
-        assertEquals("Outer Test Class", innerTest.getSuites().get(0));
-        assertEquals("Inner Test Class", innerTest.getSuites().get(1));
+        assertEquals("OuterTest", innerTest.getSuites().get(0));
+        assertEquals("InnerTest", innerTest.getSuites().get(1));
     }
 
     @Test

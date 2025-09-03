@@ -62,11 +62,7 @@ public class TestMethodExtractor {
     }
 
     private String getTestName(MethodDeclaration method) {
-        return method.getAnnotations().stream()
-                .filter(ann -> "DisplayName".equals(ann.getNameAsString()))
-                .findFirst()
-                .map(this::getAnnotationValue)
-                .orElse(method.getNameAsString());
+        return method.getNameAsString();
     }
 
     private String getMethodCode(MethodDeclaration method) {
@@ -133,10 +129,7 @@ public class TestMethodExtractor {
         }
 
         for (ClassOrInterfaceDeclaration clazz : classHierarchy) {
-            String suiteName = clazz.getAnnotationByName("DisplayName")
-                    .map(this::getAnnotationValue)
-                    .orElse(clazz.getNameAsString());
-            suites.add(suiteName);
+            suites.add(clazz.getNameAsString());
         }
 
         return suites;
