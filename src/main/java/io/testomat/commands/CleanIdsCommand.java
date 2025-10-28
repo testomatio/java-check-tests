@@ -114,24 +114,13 @@ public class CleanIdsCommand implements Runnable {
                 log.info("  Removed {} TestId imports", result.getRemovedImports());
             }
 
-            if (!dryRun) {
-                saveFile(cu);
-            }
+            // Note: File is now saved by AnnotationCleaner using MinimalFileModificationService
+            // to preserve original code style
 
             totalResult.addResults(result.getRemovedAnnotations(), result.getRemovedImports());
         } else {
             log.info("  No @TestId annotations or imports found");
         }
-    }
-
-    private void saveFile(CompilationUnit cu) {
-        cu.getStorage().ifPresent(storage -> {
-            try {
-                storage.save();
-            } catch (Exception e) {
-                throw new CliException("Failed to save file: " + storage.getPath(), e);
-            }
-        });
     }
 
     private void printSummary(FilesProcessingResult result) {

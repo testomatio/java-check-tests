@@ -14,21 +14,64 @@ public class AnnotationCleaner {
     private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
     private static final String TEST_ID_ANNOTATION = "TestId";
 
-    public CleanupResult cleanTestIdAnnotations(CompilationUnit cu, boolean dryRun) {
-        int removedAnnotations = removeTestIdAnnotations(cu, dryRun);
-        int removedImports = removeTestIdImports(cu, dryRun);
+    private final MinimalFileModificationService fileModificationService;
 
-        return new CleanupResult(removedAnnotations, removedImports);
+    public AnnotationCleaner() {
+        this.fileModificationService = new MinimalFileModificationService();
     }
 
-    private int removeTestIdAnnotations(CompilationUnit cu, boolean dryRun) {
+    public CleanupResult cleanTestIdAnnotations(CompilationUnit cu, boolean dryRun) {
         List<AnnotationExpr> testIdAnnotations = findTestIdAnnotations(cu);
+        List<ImportDeclaration> testIdImports = findTestIdImports(cu);
 
         if (!dryRun) {
-            testIdAnnotations.forEach(AnnotationExpr::remove);
+            // Try to use minimal modification service if possible (real files)
+            // Otherwise fall back to direct AST modification (tests, in-memory CUs)
+            if (cu.getStorage().isPresent() && canUseMinimalModification(testIdAnnotations)) {
+                try {
+                    applyMinimalModifications(cu, testIdAnnotations, testIdImports);
+                } catch (Exception e) {
+                    // Fallback to direct modification if minimal modification fails
+                    applyDirectModifications(testIdAnnotations, testIdImports);
+                }
+            } else {
+                // Direct modification for in-memory CompilationUnits
+                applyDirectModifications(testIdAnnotations, testIdImports);
+            }
         }
 
-        return testIdAnnotations.size();
+        return new CleanupResult(testIdAnnotations.size(), testIdImports.size());
+    }
+
+    private boolean canUseMinimalModification(List<AnnotationExpr> annotations) {
+        // Check if all annotations have positions (required for minimal modification)
+        return annotations.stream().allMatch(ann -> ann.getBegin().isPresent());
+    }
+
+    private void applyMinimalModifications(CompilationUnit cu,
+                                          List<AnnotationExpr> annotations,
+                                          List<ImportDeclaration> imports) {
+        MinimalFileModificationService.FileModification modification =
+                new MinimalFileModificationService.FileModification(cu);
+
+        for (AnnotationExpr annotation : annotations) {
+            modification.removeAnnotation(annotation);
+        }
+
+        for (ImportDeclaration importDecl : imports) {
+            modification.removeImport(importDecl);
+        }
+
+        if (modification.hasModifications()) {
+            fileModificationService.applyModifications(modification);
+        }
+    }
+
+    private void applyDirectModifications(List<AnnotationExpr> annotations,
+                                         List<ImportDeclaration> imports) {
+        // Direct AST modification (used for tests and fallback)
+        annotations.forEach(AnnotationExpr::remove);
+        imports.forEach(ImportDeclaration::remove);
     }
 
     private List<AnnotationExpr> findTestIdAnnotations(CompilationUnit cu) {
@@ -43,16 +86,6 @@ public class AnnotationCleaner {
         }
 
         return testIdAnnotations;
-    }
-
-    private int removeTestIdImports(CompilationUnit cu, boolean dryRun) {
-        List<ImportDeclaration> testIdImports = findTestIdImports(cu);
-
-        if (!dryRun) {
-            findTestIdImports(cu).forEach(ImportDeclaration::remove);
-        }
-
-        return testIdImports.size();
     }
 
     private List<ImportDeclaration> findTestIdImports(CompilationUnit cu) {

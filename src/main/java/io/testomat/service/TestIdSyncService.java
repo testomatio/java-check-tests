@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import io.testomat.client.TestomatHttpClient;
 import io.testomat.progressbar.LoadingSpinner;
 import io.testomat.progressbar.ProgressBar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,16 +17,19 @@ public class TestIdSyncService {
     private static final int METHOD_NAME_INDEX = 2;
     private static final int EXPECTED_PARTS_COUNT = 3;
     private static final String SPLIT_DELIMITER = "#";
+    private static final String TEST_ID_IMPORT = "io.testomat.core.annotation.TestId";
 
     private final TestomatHttpClient httpClient;
     private final ResponseParser responseParser;
     private final TestIdAnnotationManager annotationManager;
+    private final MinimalFileModificationService fileModificationService;
 
     public TestIdSyncService(TestomatHttpClient httpClient, ResponseParser responseParser,
                              TestIdAnnotationManager annotationManager) {
         this.httpClient = httpClient;
         this.responseParser = responseParser;
         this.annotationManager = annotationManager;
+        this.fileModificationService = new MinimalFileModificationService();
     }
 
     public SyncResult syncTestIds(String apiKey, String serverUrl,
@@ -58,15 +62,23 @@ public class TestIdSyncService {
             progressBar = new ProgressBar(testsMap.size(), "Processing test IDs");
         }
 
-        int processedCount = processTestMethods(compilationUnits, testsMap, verbose, progressBar);
-        int modifiedFilesCount = saveModifiedFiles(compilationUnits);
+        // Track file modifications
+        Map<CompilationUnit, MinimalFileModificationService.FileModification> modifications =
+                new HashMap<>();
+
+        int processedCount = processTestMethods(compilationUnits, testsMap, modifications,
+                verbose, progressBar);
+        int modifiedFilesCount = applyFileModifications(modifications);
 
         return new SyncResult(processedCount, modifiedFilesCount);
     }
 
-    private int processTestMethods(List<CompilationUnit> compilationUnits,
-                                   Map<String, String> testsMap, boolean verbose,
-                                   ProgressBar progressBar) {
+    private int processTestMethods(
+            List<CompilationUnit> compilationUnits,
+            Map<String, String> testsMap,
+            Map<CompilationUnit, MinimalFileModificationService.FileModification> modifications,
+            boolean verbose,
+            ProgressBar progressBar) {
         int processedCount = 0;
         int skippedCount = 0;
         int currentEntry = 0;
@@ -97,8 +109,30 @@ public class TestIdSyncService {
                 CompilationUnit compilationUnit = method.findCompilationUnit().orElse(null);
 
                 if (compilationUnit != null) {
-                    annotationManager.addTestIdAnnotationToMethod(method, testId);
-                    annotationManager.ensureTestIdImportExists(compilationUnit);
+                    // Check if we can use minimal modification (has storage and position)
+                    boolean canUseMinimalMod = compilationUnit.getStorage().isPresent()
+                            && method.getBegin().isPresent();
+
+                    if (canUseMinimalMod) {
+                        // Track modification for later application
+                        MinimalFileModificationService.FileModification modification =
+                                modifications.computeIfAbsent(compilationUnit,
+                                        MinimalFileModificationService.FileModification::new);
+
+                        modification.addMethodAnnotation(method, testId);
+
+                        // Check if import is needed
+                        boolean hasImport = compilationUnit.getImports().stream()
+                                .anyMatch(imp -> TEST_ID_IMPORT.equals(imp.getNameAsString()));
+                        if (!hasImport) {
+                            modification.setNeedsImport(true);
+                        }
+                    } else {
+                        // Fallback: direct AST modification for tests/in-memory CUs
+                        annotationManager.addTestIdAnnotationToMethod(method, testId);
+                        annotationManager.ensureTestIdImportExists(compilationUnit);
+                    }
+
                     processedCount++;
                     if (verbose) {
                         System.out.println("  ✓ Added TestId annotation to method: "
@@ -160,11 +194,13 @@ public class TestIdSyncService {
         return new TestIdAnnotationManager.TestMethodInfo(filePath, className, methodName);
     }
 
-    private int saveModifiedFiles(List<CompilationUnit> compilationUnits) {
+    private int applyFileModifications(Map<CompilationUnit,
+            MinimalFileModificationService.FileModification> modifications) {
         int modifiedCount = 0;
-        for (CompilationUnit cu : compilationUnits) {
-            if (cu.getStorage().isPresent()) {
-                cu.getStorage().get().save();
+        for (MinimalFileModificationService.FileModification modification
+                : modifications.values()) {
+            if (modification.hasModifications()) {
+                fileModificationService.applyModifications(modification);
                 modifiedCount++;
             }
         }
