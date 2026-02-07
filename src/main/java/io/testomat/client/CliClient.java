@@ -1,7 +1,5 @@
 package io.testomat.client;
 
-import static java.util.Objects.isNull;
-
 import io.testomat.exception.CliException;
 import java.io.IOException;
 import java.net.ConnectException;
@@ -12,14 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class CliClient implements TestomatHttpClient {
@@ -39,10 +29,8 @@ public class CliClient implements TestomatHttpClient {
     private static final int SUCCESS_STATUS_MAX = 299;
     private static final int CLIENT_ERROR_MIN = 400;
     private static final int CLIENT_ERROR_MAX = 499;
-    private static final int THREAD_POOL_COUNT = 4;
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-            .executor(Executors.newFixedThreadPool(THREAD_POOL_COUNT))
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
@@ -82,20 +70,65 @@ public class CliClient implements TestomatHttpClient {
     }
 
     @Override
-    public void sendPostRequest(String url, Stream<String> batchJsonBodies) {
-        ExecutorService batchExecutor = Executors.newFixedThreadPool(4);
+    public void sendPostRequests(String url, Stream<String> batchJsonBody) {
+        batchJsonBody.forEach(jsonBody -> sendPostRequest(url, jsonBody));
+    }
 
-        CompletableFuture.allOf(
-                batchJsonBodies
-                    .map(batchJson ->
-                        CompletableFuture
-                            .supplyAsync(() -> sendWithRetry(url, batchJson, 1), batchExecutor)
-                            .thenCompose(cf -> cf)
-                    )
-                    .toArray(CompletableFuture[]::new)
-            )
-                .whenComplete((v, ex) -> batchExecutor.shutdown());
+    @Override
+    public void sendPostRequest(String url, String jsonBody) {
+        int attempt = 1;
+        Exception lastException = null;
 
+        while (attempt <= MAX_RETRIES) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("Content-Type", CONTENT_TYPE_JSON)
+                        .header("User-Agent", USER_AGENT)
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                        .timeout(POST_REQUEST_TIMEOUT)
+                        .build();
+
+                HttpResponse<String> response = HTTP_CLIENT.send(request,
+                        HttpResponse.BodyHandlers.ofString());
+
+                if (isSuccessfulResponse(response)) {
+                    return;
+                }
+
+                String errorMessage = formatPostHttpError(response);
+
+                if (isClientError(response)) {
+                    throw new CliException(errorMessage);
+                }
+
+                lastException = new CliException(errorMessage);
+
+            } catch (ConnectException e) {
+                lastException = new CliException("Cannot connect to testomat.io server. "
+                        + "Please check your internet connection.", e);
+            } catch (SocketTimeoutException e) {
+                lastException = new CliException("Request timed out. The server might be busy.", e);
+            } catch (IOException | InterruptedException e) {
+                lastException = new CliException("Network error occurred", e);
+            }
+
+            if (attempt < MAX_RETRIES) {
+                System.err.println("Attempt " + attempt + " failed, retrying in "
+                        + (RETRY_DELAY_MS * attempt) + "ms...");
+                try {
+                    Thread.sleep((long) RETRY_DELAY_MS * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new CliException("Export interrupted", ie);
+                }
+            }
+
+            attempt++;
+        }
+
+        throw new CliException("Failed to send data after " + MAX_RETRIES + " attempts",
+                lastException);
     }
 
     private void validateApiKey(String apiKey) {
@@ -171,87 +204,5 @@ public class CliClient implements TestomatHttpClient {
                 return "HTTP " + statusCode + ": "
                         + (body != null && !body.isEmpty() ? body : "Unknown error");
         }
-    }
-
-    CompletableFuture<Void> sendBatch(String url, String jsonBody) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Content-Type", CONTENT_TYPE_JSON)
-                .header("User-Agent", USER_AGENT)
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                .timeout(POST_REQUEST_TIMEOUT)
-                .build();
-
-        return HTTP_CLIENT
-            .sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenAccept(response -> {
-                if (!isSuccessfulResponse(response)) {
-                    throw new CliException(formatPostHttpError(response));
-                }
-            })
-            .exceptionally(ex -> {
-                Throwable cause =
-                        ex instanceof CompletionException ? ex.getCause() : ex;
-
-                if (cause instanceof ConnectException) {
-                    throw new CliException(
-                        "Cannot connect to testomat.io server. "
-                            + "Please check your internet connection.",
-                        cause
-                    );
-                }
-
-                if (cause instanceof SocketTimeoutException) {
-                    throw new CliException(
-                        "Request timed out. The server might be busy.",
-                        cause
-                    );
-                }
-
-                if (cause instanceof IOException || cause instanceof InterruptedException) {
-                    throw new CliException(
-                        "Network error occurred",
-                        cause
-                    );
-                }
-
-                throw new CliException("Unexpected error occurred", cause);
-            });
-    }
-
-    CompletableFuture<Void> sendWithRetry(String url, String jsonBody, int attempt) {
-        return flatten(sendBatch(url, jsonBody)
-            .handle((res, ex) -> {
-                if (isNull(ex)) {
-                    return CompletableFuture.completedFuture(null);
-                }
-
-                if (attempt >= MAX_RETRIES) {
-                    Throwable cause =
-                            ex instanceof CompletionException ? ex.getCause() : ex;
-
-                    return CompletableFuture.failedFuture(
-                        new CliException(
-                            "Failed to send data after " + MAX_RETRIES + " attempts",
-                            cause
-                        )
-                    );
-
-                }
-
-                System.err.println("Attempt " + attempt + " failed, retrying in "
-                        + (RETRY_DELAY_MS * attempt) + "ms...");
-
-                Executor delayed =
-                        CompletableFuture.delayedExecutor(RETRY_DELAY_MS, TimeUnit.MILLISECONDS);
-
-                return CompletableFuture
-                    .runAsync(() -> {}, delayed)
-                    .thenCompose(v -> sendWithRetry(url, jsonBody, attempt + 1));
-            }));
-    }
-
-    private <T> CompletableFuture<T> flatten(CompletableFuture<? extends CompletionStage<T>> cf) {
-        return cf.thenCompose(Function.identity());
     }
 }

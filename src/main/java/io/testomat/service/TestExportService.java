@@ -24,6 +24,7 @@ public class TestExportService {
     private final JsonBuilder jsonBuilder;
     private final TestomatHttpClient httpClient;
     private final LoadingSpinner spinner;
+    private final int batchSize = 100;
 
     public TestExportService() {
         this.fileParser = new JavaFileParser();
@@ -75,8 +76,6 @@ public class TestExportService {
                                    String apiKey, String serverUrl) {
         validateExportConfig(serverUrl);
 
-        int batchSize = 1000;
-
         Stream<String> batchJsonBodies =
                 IntStream.iterate(0, i -> i < allTestCases.size(), i -> i + batchSize)
                 .mapToObj(i ->
@@ -91,7 +90,7 @@ public class TestExportService {
         spinner.start();
 
         try {
-            httpClient.sendPostRequest(requestUrl, batchJsonBodies);
+            httpClient.sendPostRequests(requestUrl, batchJsonBodies);
         } catch (Exception e) {
             throw new CliException("Error while executing request", e);
         }
