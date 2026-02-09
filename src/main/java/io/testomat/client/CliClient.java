@@ -10,7 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
-import java.util.stream.Stream;
 
 public class CliClient implements TestomatHttpClient {
 
@@ -67,11 +66,6 @@ public class CliClient implements TestomatHttpClient {
         } catch (Exception e) {
             throw new CliException("Unexpected error occurred: " + e.getMessage(), e);
         }
-    }
-
-    @Override
-    public void sendPostRequests(String url, Stream<String> batchJsonBody) {
-        batchJsonBody.forEach(jsonBody -> sendPostRequest(url, jsonBody));
     }
 
     @Override
