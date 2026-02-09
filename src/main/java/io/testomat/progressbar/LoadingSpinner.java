@@ -1,5 +1,8 @@
 package io.testomat.progressbar;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class LoadingSpinner {
     private static final String[] SPINNER_CHARS = {"|", "/", "-", "\\"};
     private volatile boolean running = false;
@@ -54,6 +57,6 @@ public class LoadingSpinner {
 
     public void stopWithMessage(String completionMessage) {
         stop();
-        System.out.println(completionMessage);
+        log.info(completionMessage);
     }
 }

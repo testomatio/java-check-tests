@@ -111,7 +111,7 @@ public class CliClient implements TestomatHttpClient {
                 System.err.println("Attempt " + attempt + " failed, retrying in "
                         + (RETRY_DELAY_MS * attempt) + "ms...");
                 try {
-                    Thread.sleep(RETRY_DELAY_MS * attempt);
+                    Thread.sleep((long) RETRY_DELAY_MS * attempt);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw new CliException("Export interrupted", ie);

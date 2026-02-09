@@ -10,6 +10,8 @@ import io.testomat.progressbar.ProgressBar;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +24,7 @@ public class TestExportService {
     private final JsonBuilder jsonBuilder;
     private final TestomatHttpClient httpClient;
     private final LoadingSpinner spinner;
+    private final int batchSize = 100;
 
     public TestExportService() {
         this.fileParser = new JavaFileParser();
@@ -73,13 +76,21 @@ public class TestExportService {
                                    String apiKey, String serverUrl) {
         validateExportConfig(serverUrl);
 
-        String requestBody = jsonBuilder.buildRequestBody(allTestCases, framework);
+        Stream<String> batchJsonBodies =
+                IntStream.iterate(0, i -> i < allTestCases.size(), i -> i + batchSize)
+                .mapToObj(i ->
+                jsonBuilder.buildRequestBody(
+                    allTestCases.subList(i,
+                        Math.min(i + batchSize, allTestCases.size())),
+                    framework)
+            );
+
         String requestUrl = serverUrl + "/api/load?api_key=" + apiKey;
 
         spinner.start();
 
         try {
-            httpClient.sendPostRequest(requestUrl, requestBody);
+            batchJsonBodies.forEach(jsonBody -> httpClient.sendPostRequest(requestUrl, jsonBody));
         } catch (Exception e) {
             throw new CliException("Error while executing request", e);
         }
