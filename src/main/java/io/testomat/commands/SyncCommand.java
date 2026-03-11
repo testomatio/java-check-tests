@@ -9,7 +9,7 @@ import picocli.CommandLine;
         mixinStandardHelpOptions = true)
 public class SyncCommand implements Runnable {
     private static final String DEFAULT_URL = "https://app.testomat.io";
-    private static final String VERSION = "v.0.1.8";
+    private static final String VERSION = "v.0.1.9";
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},
@@ -35,6 +35,11 @@ public class SyncCommand implements Runnable {
             names = {"-v", "--verbose"},
             description = "Enable verbose output")
     private boolean verbose = false;
+
+    @CommandLine.Option(
+            names = {"-s", "--keep-structure"},
+            description = "Prefer structure of source code over structure in Testomat.io")
+    private boolean structure = false;
 
     @CommandLine.Spec
     private CommandLine.Model.CommandSpec spec;
@@ -65,11 +70,13 @@ public class SyncCommand implements Runnable {
                     "--apikey=" + apiKey,
                     "--url=" + url,
                     "--directory=" + directory,
+                    "--keep-structure=" + structure,
                     "-v"}
                 : new String[]{command,
                     "--apikey=" + apiKey,
                     "--url=" + url,
-                    "--directory=" + directory};
+                    "--directory=" + directory,
+                    "--keep-structure=" + structure};
     }
 
     private void handeCommandExecution(CommandLine parent, String[] args) {

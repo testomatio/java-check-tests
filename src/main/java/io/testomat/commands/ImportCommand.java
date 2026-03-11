@@ -53,6 +53,11 @@ public class ImportCommand implements Callable<Integer> {
     private boolean verbose = false;
 
     @Option(
+            names = {"-s", "--keep-structure"},
+            description = "Prefer structure of source code over structure in Testomat.io")
+    private boolean structure = false;
+
+    @Option(
             names = {"--dry-run"},
             description = "Show what would be exported without sending")
     private boolean dryRun = false;
@@ -106,7 +111,7 @@ public class ImportCommand implements Callable<Integer> {
             ProgressBar progressBar = new ProgressBar(testFiles.size(),
                     "Parsing " + testFiles.size() + " files");
             int totalExported = exportService.processTestFilesWithProgress(
-                    testFiles, apiKey, serverUrl, dryRun, verbose, progressBar);
+                    testFiles, apiKey, serverUrl, dryRun, verbose, progressBar, structure);
 
             printCompletionMessage(totalExported);
 

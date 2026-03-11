@@ -37,6 +37,7 @@ Will dry run if apikey is not provided.
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
 >- `--verbose` / `-v` - Enable verbose output (optional)
 >- `--dry-run` - Show what would be exported without sending (optional)
+>- `--keep-structure` - Prefer structure of source code over structure in Testomat.io (optional). Default: `false`
 
 
 ### `sync`
@@ -51,6 +52,7 @@ Convenience command for typical workflow.
 >- `--apikey` / `-key` - Your Testomat.io project API key (required if you haven't provided it during this terminal session as TESTOMATIO)
 >- `--url` - Server URL (required  if you haven't provided it during this terminal session as TESTOMATIO_URL or want to use default https://app.testomat.io)
 >- `--directory` / `-d` - Directory to scan (optional, defaults to current directory)
+>- `--keep-structure` - Prefer structure of source code over structure in Testomat.io (optional). Default: `false`
 
 **Please note:** if not all the tests have been annotated with @TestId after the sync command -  
 simply rerun the command.

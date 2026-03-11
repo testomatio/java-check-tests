@@ -49,9 +49,10 @@ public class TestMethodExtractor {
     }
 
     private TestCase createTestCase(MethodDeclaration method, String filepath, String framework) {
+        String testId = getTestId(method).orElse("");
         TestCase testCase = new TestCase();
 
-        testCase.setName(getTestName(method));
+        testCase.setName(getTestName(method) + testId);
         testCase.setCode(getMethodCode(method));
         testCase.setSkipped(isTestSkipped(method));
         testCase.setSuites(getSuites(method));
@@ -113,6 +114,14 @@ public class TestMethodExtractor {
                 || methodName.startsWith("skip");
 
         return hasSkipAnnotation || hasSkipMethodName;
+    }
+
+    private Optional<String> getTestId(MethodDeclaration method) {
+        return method.getAnnotationByName("TestId")
+            .map(ann -> " @T" + ann.asSingleMemberAnnotationExpr()
+                .getMemberValue()
+                .asStringLiteralExpr()
+                .getValue());
     }
 
     private List<String> getSuites(MethodDeclaration method) {

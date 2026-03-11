@@ -16,7 +16,7 @@ public class JsonBuilder {
         this.objectMapper = new ObjectMapper();
     }
 
-    public String buildRequestBody(List<TestCase> testCases, String framework) {
+    public String buildRequestBody(List<TestCase> testCases, String framework, boolean structure) {
         try {
             ObjectNode rootNode = objectMapper.createObjectNode();
             
@@ -24,7 +24,7 @@ public class JsonBuilder {
             rootNode.put("language", LANGUAGE);
             rootNode.put("noempty", true);
             rootNode.put("no-detach", true);
-            rootNode.put("structure", true);
+            rootNode.put("structure", structure);
             rootNode.put("sync", true);
             
             ArrayNode testsArray = objectMapper.createArrayNode();
