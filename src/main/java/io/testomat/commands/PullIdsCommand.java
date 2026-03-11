@@ -42,6 +42,11 @@ public class PullIdsCommand implements Runnable {
             description = "Enable verbose output")
     private boolean verbose = false;
 
+    @CommandLine.Option(
+            names = {"-s", "--keep-structure"},
+            description = "Prefer structure of source code over structure in Testomat.io")
+    private boolean structure = false;
+
     public PullIdsCommand() {
         this.javaParser = new JavaParser();
     }

@@ -48,11 +48,12 @@ public class TestExportService {
 
     public int processTestFilesWithProgress(List<File> testFiles, String apiKey,
                                             String serverUrl, boolean dryRun,
-                                            boolean verbose, ProgressBar progressBar) {
+                                            boolean verbose, ProgressBar progressBar,
+                                            boolean structure) {
         ProcessingResult result = processAllFiles(testFiles, verbose, progressBar);
 
         return handleProcessingResult(result.allTestCases, result.primaryFramework,
-                apiKey, serverUrl, dryRun);
+                apiKey, serverUrl, dryRun, structure);
     }
 
     private List<TestCase> collectTestCasesFromFile(File file) {
@@ -73,7 +74,7 @@ public class TestExportService {
     }
 
     private int exportAllTestCases(List<TestCase> allTestCases, String framework,
-                                   String apiKey, String serverUrl) {
+                                   String apiKey, String serverUrl, boolean structure) {
         validateExportConfig(serverUrl);
 
         Stream<String> batchJsonBodies =
@@ -82,7 +83,7 @@ public class TestExportService {
                 jsonBuilder.buildRequestBody(
                     allTestCases.subList(i,
                         Math.min(i + batchSize, allTestCases.size())),
-                    framework)
+                    framework, structure)
             );
 
         String requestUrl = serverUrl + "/api/load?api_key=" + apiKey;
@@ -150,7 +151,8 @@ public class TestExportService {
     }
 
     private int handleProcessingResult(List<TestCase> allTestCases, String primaryFramework,
-                                       String apiKey, String serverUrl, boolean dryRun) {
+                                        String apiKey, String serverUrl, boolean dryRun,
+                                        boolean structure) {
         if (allTestCases.isEmpty()) {
             log.info("No test methods found across all files");
             return 0;
@@ -162,7 +164,7 @@ public class TestExportService {
             printAllTestCases(allTestCases);
             return allTestCases.size();
         } else {
-            return exportAllTestCases(allTestCases, primaryFramework, apiKey, serverUrl);
+            return exportAllTestCases(allTestCases, primaryFramework, apiKey, serverUrl, structure);
         }
     }
 
