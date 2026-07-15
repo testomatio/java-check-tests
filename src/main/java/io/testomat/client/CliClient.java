@@ -69,7 +69,7 @@ public class CliClient implements TestomatHttpClient {
     }
 
     @Override
-    public void sendPostRequest(String url, String jsonBody) {
+    public HttpResponse<String> sendPostRequest(String url, String jsonBody) {
         int attempt = 1;
         Exception lastException = null;
 
@@ -87,7 +87,7 @@ public class CliClient implements TestomatHttpClient {
                         HttpResponse.BodyHandlers.ofString());
 
                 if (isSuccessfulResponse(response)) {
-                    return;
+                    return response;
                 }
 
                 String errorMessage = formatPostHttpError(response);
