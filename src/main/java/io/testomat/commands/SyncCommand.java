@@ -9,7 +9,7 @@ import picocli.CommandLine;
         mixinStandardHelpOptions = true)
 public class SyncCommand implements Runnable {
     private static final String DEFAULT_URL = "https://app.testomat.io";
-    private static final String VERSION = "v.0.1.9";
+    private static final String VERSION = "v.0.1.14";
 
     @CommandLine.Option(
             names = {"-key", "--apikey"},

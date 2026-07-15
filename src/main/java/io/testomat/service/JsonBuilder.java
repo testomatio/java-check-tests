@@ -1,5 +1,6 @@
 package io.testomat.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -60,5 +61,42 @@ public class JsonBuilder {
             }
         }
         return arrayNode;
+    }
+
+    public String addChunkMetadata(
+            String json,
+            boolean chunkUpload,
+            String importId,
+            boolean finish) {
+
+        try {
+            ObjectNode root = (ObjectNode) objectMapper.readTree(json);
+
+            if (chunkUpload) {
+                root.put("chunk_upload", true);
+            }
+
+            if (importId != null && !importId.isBlank()) {
+                root.put("import_id", importId);
+            }
+
+            if (finish) {
+                root.put("finish", true);
+            }
+
+            return objectMapper.writeValueAsString(root);
+
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to enrich request body", e);
+        }
+    }
+
+    public String extractImportId(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            return root.path("import_id").asText(null);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse import_id from response", e);
+        }
     }
 }

@@ -8,10 +8,11 @@ import io.testomat.model.TestCase;
 import io.testomat.progressbar.LoadingSpinner;
 import io.testomat.progressbar.ProgressBar;
 import java.io.File;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,23 +78,39 @@ public class TestExportService {
                                    String apiKey, String serverUrl, boolean structure) {
         validateExportConfig(serverUrl);
 
-        Stream<String> batchJsonBodies =
-                IntStream.iterate(0, i -> i < allTestCases.size(), i -> i + batchSize)
-                .mapToObj(i ->
-                jsonBuilder.buildRequestBody(
-                    allTestCases.subList(i,
-                        Math.min(i + batchSize, allTestCases.size())),
-                    framework, structure)
-            );
+        List<String> batches = IntStream.iterate(0, i ->
+                i < allTestCases.size(), i -> i + batchSize)
+                .mapToObj(i -> jsonBuilder.buildRequestBody(
+                    allTestCases.subList(i, Math.min(i + batchSize, allTestCases.size())),
+                    framework,
+                    structure))
+                .collect(Collectors.toList());
 
         String requestUrl = serverUrl + "/api/load?api_key=" + apiKey;
 
         spinner.start();
 
-        try {
-            batchJsonBodies.forEach(jsonBody -> httpClient.sendPostRequest(requestUrl, jsonBody));
-        } catch (Exception e) {
-            throw new CliException("Error while executing request", e);
+        String importId = null;
+
+        for (int i = 0; i < batches.size(); i++) {
+            boolean last = i == batches.size() - 1;
+
+            String body = jsonBuilder.addChunkMetadata(
+                    batches.get(i),
+                    true,
+                    importId,
+                    last
+            );
+
+            HttpResponse<String> response;
+            try {
+                response =
+                    httpClient.sendPostRequest(requestUrl, body);
+            } catch (Exception e) {
+                throw new CliException("Error while executing request", e);
+            }
+
+            importId = jsonBuilder.extractImportId(response.body());
         }
 
         spinner.stopWithMessage("Successfully exported " + allTestCases.size()
